@@ -1,25 +1,144 @@
-cmake_minimum_required (VERSION 3.14)
+include(FetchContent)
 
-project (RLZ LANGUAGES CXX VERSION 1.0.0)
+cmake_minimum_required (VERSION 3.15)
+project (rlz)
+SET(VERSION_MAJOR "1")
+SET(VERSION_MINOR "0")
+SET(VERSION_PATCH "0")
+SET(VERSION "${VERSION_MAJOR}.${VERSION_MINOR}.${VERSION_PATCH}")
 
-set (seqan3_git_tag "3.3.0")
+###############################################################################
+# Set install directory if not specified
+set(CMAKE_INSTALL_PREFIX "${CMAKE_BINARY_DIR}" CACHE PATH "Installation directory")
+################################################################################
+# Specify build type
+if(NOT CMAKE_BUILD_TYPE)
+    message(STATUS "Setting build type to 'Release' as none was specified.")
+    set(CMAKE_BUILD_TYPE "Release" CACHE STRING "Choose Release or Debug" FORCE)
+endif()
+message(STATUS "Build type: ${CMAKE_BUILD_TYPE}")
+message(STATUS "Install directory: ${CMAKE_INSTALL_PREFIX}")
+################################################################################
+# Locating Git
+find_package(Git)
+if(GIT_FOUND)
+    message(STATUS "git found: ${GIT_EXECUTABLE}")
+else()
+    message(FATAL_ERROR "git not found. Cloning of submodules will not work.")
+endif()
+################################################################################
+# Version number of project
+execute_process(
+        COMMAND git rev-parse --abbrev-ref HEAD
+        WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
+        OUTPUT_VARIABLE GIT_BRANCH
+        OUTPUT_STRIP_TRAILING_WHITESPACE)
 
-message (STATUS "Fetching SeqAn3 ${seqan3_git_tag}:")
+execute_process(
+        COMMAND git log -1 --format=%h
+        WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
+        OUTPUT_VARIABLE GIT_COMMIT_HASH
+        OUTPUT_STRIP_TRAILING_WHITESPACE)
 
-include (FetchContent)
-FetchContent_Declare (
-    seqan3_fetch_content
-    GIT_REPOSITORY "https://github.com/seqan/seqan3.git"
-    GIT_TAG "${seqan3_git_tag}"
-)
+message(STATUS "Git current branch of project: ${GIT_BRANCH}")
+message(STATUS "Git commit hash of project: ${GIT_COMMIT_HASH}")
+################################################################################
+# Compiler and linker flags
+if (CMAKE_BUILD_TYPE STREQUAL "Release")
+    set(BUILD_TYPE_FLAGS "-O3")
+elseif(CMAKE_BUILD_TYPE STREQUAL "Debug")
+    set(BUILD_TYPE_FLAGS "-g")
+elseif(CMAKE_BUILD_TYPE STREQUAL "RelWithDebInfo")
+    set(BUILD_TYPE_FLAGS "-O3 -g -DNDEBUG")
+endif()
 
-# Download and make SeqAn3 available.
-FetchContent_MakeAvailable (seqan3_fetch_content)
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${BUILD_TYPE_FLAGS}")
+#################################################################################
+# Check dependencies
 
-# Include both main.cpp and rlz.cpp in the executable.
-add_executable (rlz src/main.cpp src/rlz.cpp)
-# add_executable (rlz src/main.cpp )
+include_directories(${CMAKE_SOURCE_DIR}/include)
 
-# Set up everything needed to use SeqAn3 and sharg with rlz:
-target_link_libraries (rlz PUBLIC seqan3::seqan3)
+# Log directory for external content builds
+make_directory(${CMAKE_CURRENT_BINARY_DIR}/logs)
+set(INSTALL_FILE  ${CMAKE_CURRENT_BINARY_DIR}/install.cmake)
+
+# CLI11 (Cannot figure how to properly check if it already has been install so it always installs)
+find_package(CLI11 QUIET)
+if (NOT TARGET CLI11::CLI11)
+    message(STATUS "CLI11 not found. Building as external content")
+    FetchContent_Declare(
+        cli11_proj
+        QUIET
+        GIT_REPOSITORY https://github.com/CLIUtils/CLI11.git
+        GIT_TAG v2.3.2
+    )
+
+    FetchContent_MakeAvailable(cli11_proj)
+endif()
+
+# DIVSUFSORT
+find_library(DIVSUFSORT_LIB divsufsort HINTS ${CMAKE_CURRENT_BINARY_DIR}/lib PATHS ${CONDA_PREFIX}/lib)
+if(NOT DIVSUFSORT_LIB)
+    message(STATUS "divsufsort library not found. Building as an external content")
+else()
+    message(STATUS "divsufsort library found at ${DIVSUFSORT_LIB}.")
+endif()
+
+# DIVSUFSORT64
+find_library(DIVSUFSORT64_LIB divsufsort64 HINTS ${CMAKE_CURRENT_BINARY_DIR}/lib PATHS ${CONDA_PREFIX}/lib)
+if(NOT DIVSUFSORT64_LIB)
+    message(STATUS "divsufsort64 library not found. Building as an external content")
+else()
+    message(STATUS "divsufsort64 library found at ${DIVSUFSORT64_LIB}.")
+endif()
+
+# SDSL
+find_library(SDSL_LIB sdsl HINTS ${CMAKE_CURRENT_BINARY_DIR}/lib PATHS ${CONDA_PREFIX}/lib)
+find_path(SDSL_SRC sdsl HINTS ${CMAKE_CURRENT_BINARY_DIR}/include PATHS ${CONDA_PREFIX}/include)
+if(NOT SDSL_LIB)
+    message(STATUS "sdsl library not found. Building as an external content")
+    FetchContent_Declare(sdsl
+            GIT_REPOSITORY "https://github.com/simongog/sdsl-lite.git"
+            # GIT_TAG "v2.1.1"
+    )
+
+    if(NOT sdsl_POPULATED)
+        FetchContent_Populate(sdsl)
+        # Install in the current binary dir
+        execute_process(COMMAND ./install.sh ${CMAKE_CURRENT_BINARY_DIR}
+                RESULT_VARIABLE result
+                WORKING_DIRECTORY ${sdsl_SOURCE_DIR} 
+                OUTPUT_FILE ${CMAKE_CURRENT_BINARY_DIR}/logs/sdsl.log
+                ERROR_FILE ${CMAKE_CURRENT_BINARY_DIR}/logs/sdsl.log)
+        file(APPEND ${INSTALL_FILE} "MESSAGE(STATUS \"Installing sdsl.\")\n")
+        file(APPEND ${INSTALL_FILE} "execute_process(COMMAND ./install.sh \${CMAKE_INSTALL_PREFIX}
+                WORKING_DIRECTORY ${sdsl_SOURCE_DIR} 
+                OUTPUT_FILE ${CMAKE_CURRENT_BINARY_DIR}/logs/sdsl.log
+                ERROR_FILE ${CMAKE_CURRENT_BINARY_DIR}/logs/sdsl.log)\n")
+        if(result)
+            message(FATAL_ERROR "CMake step for sdsl-lite failed: ${result}")
+        endif()
+    endif()
+
+    set(SDSL_SRC ${CMAKE_CURRENT_BINARY_DIR}/include CACHE PATH "Path to include dir" FORCE)
+    set(DIVSUFSORT_SRC ${CMAKE_CURRENT_BINARY_DIR}/include CACHE PATH "Path to include dir" FORCE)
+    set(SDSL_LIB ${CMAKE_CURRENT_BINARY_DIR}/lib/libsdsl.a CACHE FILEPATH "Path to libsdsl.a" FORCE)
+    set(DIVSUFSORT_LIB ${CMAKE_CURRENT_BINARY_DIR}/lib/libdivsufsort.a CACHE FILEPATH "Path to libdivsufsort.a" FORCE)
+    set(DIVSUFSORT64_LIB ${CMAKE_CURRENT_BINARY_DIR}/lib/libdivsufsort64.a CACHE FILEPATH "Path to libdivsufsort64.a" FORCE)
+
+else()
+    message(STATUS "sdsl library found at ${SDSL_LIB}.")
+    message(STATUS "sdsl sources found at ${SDSL_SRC}.")
+endif()
+
+add_library(rlz_algo ${CMAKE_SOURCE_DIR}/src/rlz_algo.cpp)
+target_include_directories(rlz_algo PUBLIC ${SDSL_SRC} ${DIVSUFSORT_SRC} ${DIVSUFSORT64_SRC})
+target_link_libraries(rlz_algo PUBLIC ${SDSL_LIB} ${DIVSUFSORT_LIB} ${DIVSUFSORT64_LIB})
+
+add_executable(rlz rlz.cpp)
+target_include_directories(rlz PUBLIC ${SDSL_SRC})
+target_link_libraries(rlz PUBLIC ${SDSL_LIB} rlz_algo)
+target_link_libraries(rlz PRIVATE CLI11::CLI11)
+
+install(TARGETS rlz TYPE RUNTIME)
 
