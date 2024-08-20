@@ -7,6 +7,7 @@
 #include <vector>
 #include <tuple>
 #include <cstdio>
+#include <stack>
 
 namespace RLZ_Algo {
 
@@ -124,12 +125,14 @@ namespace RLZ_Algo {
     * 
     * @warning Supposedly cannot create a FM-index directly from bit array.
     * Have to first convert into string and then create the FM-index.
-    * Likely a bottleneck in the code.
+    * Likely a bottleneck in the code. 
     *
     * @warning The FM-index of sdsl has the limitation that it does not give any way to find position of 
     * last char match of pattern in the event that the pattern does not perfectly match a substring in the index.
     * This means that a lot of redundant work is going to happen since we have to keep rechecking previous matches.
-    * Have to write a wrapper around sdsl FM-index or maybe look at r-index implementation and see if that does it, idk.
+    * Have to write a wrapper around sdsl FM-index or maybe look at r-index implementation and see if that does it, idk. [maybe addressed]
+    *
+    * @warning might be more efficient to serialize the stack if this work than create the vector from stack and then serialize
     */
 
     void RLZ::compress()
@@ -143,33 +146,67 @@ namespace RLZ_Algo {
         // Creates the FM-index
         construct_im(fm_index, binary_reference_text, 1);
 
+        RLZ_Algo::FM_Wrapper fm_support;
+        fm_support.rank0 = fm_index.bwt.rank(fm_index.size(), '0');
+        fm_support.rank1 = fm_index.bwt.rank(fm_index.size(), '1');
+
         std::string pattern = "";
-        sdsl::int_vector<64> previous_locations;
-        std::vector<std::tuple<uint64_t, int>> seq_parse;
+        size_t prev_left = 0;
+        size_t prev_right = fm_index.bwt.size();
+        size_t next_left = 0;
+        size_t next_right = fm_index.bwt.size();
+        
+        std::vector<std::tuple<uint64_t, size_t>> seq_parse;
+        // Since we process the phrases backwards we store in stack initially
+        std::stack<std::tuple<uint64_t, size_t>> seq_parse_stack;
 
-        int count = 0;
+        // Static cast size_t into a signed integer (hopefully large enough)
+        long long int seq_size = static_cast<long long int>(seq_bit_array.size());
 
-        for (size_t i = 0; i < seq_bit_array.size(); ++i) 
+        // How to process the bits in reverse for backwards matching
+        for (long long int i = seq_size - 1 ; i >= 0; i--) 
         {
-            pattern += seq_bit_array[i] ? '1' : '0';
-            sdsl::int_vector<64> locations = sdsl::locate(fm_index, pattern.begin(), pattern.end());
-            if (locations.empty()){
-                count += pattern.size()-1;
-                seq_parse.emplace_back(std::make_tuple(previous_locations[0], pattern.size()-1));
+            char next_char = seq_bit_array[i] ? '1' : '0';
+
+            pattern = next_char + pattern;
+
+            std::tuple<size_t,size_t> previous_ranges = std::make_tuple(prev_left, prev_right);
+            std::tuple<size_t,size_t> next_ranges = fm_support.backward_match(fm_index, previous_ranges, next_char);
+            next_left = std::get<0>(next_ranges);
+            next_right = std::get<1>(next_ranges);
+
+            // If same then that means no perfect match so we reset.
+            if (next_left == next_right){
+                seq_parse_stack.push(std::make_tuple(fm_support.get_suffix_array_value(fm_index, prev_left), pattern.size()-1));
+                prev_left = 0;
+                prev_right = fm_index.bwt.size()-1;
+                next_left = 0;
+                next_right = fm_index.bwt.size()-1;
                 pattern = "";
-                --i;
+                ++i;
             }
-            else if (i == seq_bit_array.size()-1)
+            // If at the end we are still in a perfect match, we save what we have. 
+            else if (i == 0)
             {
-                count += pattern.size();
-                seq_parse.emplace_back(std::make_tuple(locations[0], pattern.size()));
+                seq_parse_stack.push(std::make_tuple(fm_support.get_suffix_array_value(fm_index, next_left), pattern.size()));
             }
+            // Currently in a perfect match
             else{
-                previous_locations = locations;
+                prev_left = next_left;
+                prev_right = next_right;
             }
         }
 
+        // Pop from stack and store in seq_parse vector
+        int count = 0;
+        while (!seq_parse_stack.empty()) {
+            count += std::get<1>(seq_parse_stack.top());
+            seq_parse.emplace_back(seq_parse_stack.top());
+            seq_parse_stack.pop();
+        }
+
         serialize(seq_parse);
+        print_serialize(seq_parse);
     }
 
 
@@ -179,11 +216,11 @@ namespace RLZ_Algo {
     * The sequence parse contains tuples (binary ref pos, size) that can reconstruct the sequence file given the reference.
     * We serialize the parse vector into binary file called seq_file_name.rlz
     * 
-    * @param[in] seq_parse [std::vector<std::tuple<uint64_t, int>>] The parse of the seq <(binary ref pos,len),(binary ref pos,len),(binary ref pos,len)... >
+    * @param[in] seq_parse [std::vector<std::tuple<uint64_t, size_t>>] The parse of the seq <(binary ref pos,len),(binary ref pos,len),(binary ref pos,len)... >
     *
     */
 
-    void RLZ::serialize(const std::vector<std::tuple<uint64_t, int>>& seq_parse)
+    void RLZ::serialize(const std::vector<std::tuple<uint64_t, size_t>>& seq_parse)
     {
         std::ofstream ofs(seq_file + ".rlz", std::ios::binary);
         if (!ofs) {
@@ -192,9 +229,36 @@ namespace RLZ_Algo {
         }
         size_t size = seq_parse.size();
         ofs.write(reinterpret_cast<const char*>(&size), sizeof(size));
-        ofs.write(reinterpret_cast<const char*>(seq_parse.data()), size * sizeof(std::tuple<uint64_t, int>));
+        ofs.write(reinterpret_cast<const char*>(seq_parse.data()), size * sizeof(std::tuple<uint64_t, size_t>));
         ofs.close();
     }
+
+
+    /**
+    * @brief Write the non-binary serialization of the sequence parse to a file.
+    *
+    * The sequence parse contains tuples (binary ref pos, size) that can reconstruct the sequence file given the reference.
+    * We write the non-binary serialization to a file. Testing purposes.
+    * 
+    * @param[in] seq_parse [std::vector<std::tuple<uint64_t, size_t>>] The parse of the seq <(binary ref pos,len),(binary ref pos,len),(binary ref pos,len)... >
+    *
+    */
+
+    void RLZ::print_serialize(const std::vector<std::tuple<uint64_t, size_t>>& seq_parse)
+    {
+        std::ofstream ofs(seq_file + ".readable.rlz");
+        if (!ofs) {
+            std::cerr << "Error opening file!" << std::endl;
+            std::exit(EXIT_FAILURE);
+        }
+
+        for (const auto& [pos, len] : seq_parse){
+            ofs << "Position: " << pos << "  Length: " << len << std::endl;
+        }
+
+        ofs.close();
+    }
+
 
     /**
     * @brief Deserializes the parse of the sequence file
@@ -205,7 +269,7 @@ namespace RLZ_Algo {
     * @return Return the vector.
     */
 
-    std::vector<std::tuple<uint64_t, int>> RLZ::deserialize()
+    std::vector<std::tuple<uint64_t, size_t>> RLZ::deserialize()
     {
         std::ifstream ifs(seq_file + ".rlz", std::ios::binary);
         if (!ifs) {
@@ -213,11 +277,11 @@ namespace RLZ_Algo {
             std::exit(EXIT_FAILURE);
         }
         size_t size;
-        std::vector<std::tuple<uint64_t, int>> seq_parse;
+        std::vector<std::tuple<uint64_t, size_t>> seq_parse;
 
         ifs.read(reinterpret_cast<char*>(&size), sizeof(size));
         seq_parse.resize(size);
-        ifs.read(reinterpret_cast<char*>(seq_parse.data()), size * sizeof(std::tuple<uint64_t, int>));
+        ifs.read(reinterpret_cast<char*>(seq_parse.data()), size * sizeof(std::tuple<uint64_t, size_t>));
         ifs.close();
 
         return seq_parse;
@@ -235,7 +299,7 @@ namespace RLZ_Algo {
 
     void RLZ::decompress()
     {
-        std::vector<std::tuple<uint64_t, int>> seq_parse = deserialize();
+        std::vector<std::tuple<uint64_t, size_t>> seq_parse = deserialize();
         sdsl::load_from_file(ref_bit_array, ref_file + ".bit_array.sdsl");
         
         int bit_size = 0;
@@ -264,7 +328,7 @@ namespace RLZ_Algo {
             std::exit(EXIT_FAILURE);
         }
 
-        //std::ofstream output_file_bin(seq_file + ".out.bin", std::ios::binary);
+        std::ofstream output_file_bin(seq_file + ".out.bin", std::ios::binary);
 
         // Convert the sequence bits back into string
         std::string uncompressed_seq;
@@ -279,7 +343,7 @@ namespace RLZ_Algo {
             ++bit_count;
 
             if (bit_count == 8) { // If 8 bits have been processed
-                //output_file_bin.write(reinterpret_cast<const char*>(&byte), sizeof(byte));
+                output_file_bin.write(reinterpret_cast<const char*>(&byte), sizeof(byte));
                 uncompressed_seq += static_cast<char>(byte); // Convert byte to char and append to result
                 byte = 0; // Reset byte
                 bit_count = 0; // Reset bit count
@@ -288,7 +352,7 @@ namespace RLZ_Algo {
 
         output_file << uncompressed_seq;
         output_file.close();
-        //output_file_bin.close();
+        output_file_bin.close();
     }
 
     /**
@@ -298,14 +362,14 @@ namespace RLZ_Algo {
     *
     */
 
-    // void RLZ::save_as_binary_file(const std::string& infile)
-    // {
-    //     std::ifstream input_file(infile, std::ios::binary);
-    //     std::ofstream output_file(infile + ".bin", std::ios::binary);
-    //     output_file << input_file.rdbuf();
-    //     input_file.close();
-    //     output_file.close();
-    // }
+    void RLZ::save_as_binary_file(const std::string& infile)
+    {
+        std::ifstream input_file(infile, std::ios::binary);
+        std::ofstream output_file(infile + ".bin", std::ios::binary);
+        output_file << input_file.rdbuf();
+        input_file.close();
+        output_file.close();
+    }
 
 
     /**
@@ -322,4 +386,74 @@ namespace RLZ_Algo {
     //     std::remove((seq_file + ".bit_array.sdsl").c_str());
     //     std::remove((seq_file + ".rlz").c_str());
     // }
+
+
+    /**
+    * @brief FM Wrapper Constructor
+    *
+    * Does nothing 
+    *
+    */
+
+    FM_Wrapper::FM_Wrapper(){}
+
+     /**
+    * @brief FM Wrapper Destructor
+    *
+    * Does nothing 
+    *
+    */
+
+    FM_Wrapper::~FM_Wrapper(){}
+
+    /**
+    * @brief Extend backward match with FM-index
+    *
+    * A wrapper around sdsl::csa_wt<sdsl::wt_huff<sdsl::rrr_vector<127>>, 512, 1024> fm_index.
+    * Calculates the new backwards search range after trying to match the next char (backwards)
+    * Can continue from previous character match so do not have to keep redoing previously done backwards matches.
+    *
+    * @param[in] fm_index [sdsl::csa_wt<sdsl::wt_huff<sdsl::rrr_vector<127>>, 512, 1024>] the fm_index queried
+    * @param[in] prev_backward_range [sdsl::range] the previous backwards search range.
+    * @param[in] next_char [char] the next character to match 
+    * 
+    * @return the backwards search range of next_char 
+    */
+
+    std::tuple<size_t, size_t> FM_Wrapper::backward_match(sdsl::csa_wt<sdsl::wt_huff<sdsl::rrr_vector<127>>, 512, 1024>& fm_index, 
+                                                        std::tuple<size_t, size_t>& prev_backward_range,
+                                                        char next_char)
+    {
+        std::tuple<size_t, size_t> next_char_backward_range;
+        std::size_t next_left = fm_index.bwt.rank(std::get<0>(prev_backward_range), next_char);
+        std::size_t next_right = fm_index.bwt.rank(std::get<1>(prev_backward_range), next_char);
+
+        // If 1 then have to move ranges by the 0 range offset
+        if (next_char == '1'){
+            next_left += this->rank0;
+            next_right += this->rank0;
+        }
+
+        return std::make_tuple(next_left,next_right);
+    }
+
+    /**
+    * @brief Get corresponding location in reference via suffix array
+    *
+    * A wrapper around sdsl::csa_wt<sdsl::wt_huff<sdsl::rrr_vector<127>>, 512, 1024> fm_index.
+    * When the backwards search range becomes empty. Means there is no perfect match with the current pattern that is being processed.
+    * With the prior non-empty range we find one location of the previous perfect pattern match. This should always be next_left of backward_match
+    *
+    * @param[in] fm_index [sdsl::csa_wt<sdsl::wt_huff<sdsl::rrr_vector<127>>, 512, 1024>] the fm_index queried
+    * @param[in] location [size_t] I think should always be next_left of backward_match.
+    * 
+    * @return the suffix array index
+    */
+
+    size_t FM_Wrapper::get_suffix_array_value(sdsl::csa_wt<sdsl::wt_huff<sdsl::rrr_vector<127>>, 512, 1024>& fm_index,
+                                            size_t location)
+    {
+        return fm_index[location];
+    }
+
 }

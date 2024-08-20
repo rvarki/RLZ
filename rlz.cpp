@@ -33,7 +33,7 @@ int main(int argc, char **argv)
         printf("Ref file: %s\n", ref_file.c_str());
         printf("Seq file: %s\n", seq_file.c_str());
         RLZ_Algo::RLZ main_parser(ref_file, seq_file);
-        //main_parser.save_as_binary_file(seq_file);
+        main_parser.save_as_binary_file(seq_file);
         main_parser.load_bit_vectors();
         main_parser.compress();
     }
