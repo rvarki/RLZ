@@ -81,13 +81,13 @@ namespace RLZ_Algo {
             std::exit(EXIT_FAILURE);
         }
 
-        // Get the file size
+        // Get the file size in bytes
         std::streamsize file_size = file.tellg();
         // std::ios::beg moves cursor to beginning
         file.seekg(0, std::ios::beg);
 
-        // Effectively resizes the bit array 
-        bit_vector_resize(bit_array, file_size);
+        // Resize the bit array to hold the number of bits required
+        bit_array.resize(file_size * 8);
 
         // Read the file and populate the bit vector
         char byte;
@@ -114,27 +114,6 @@ namespace RLZ_Algo {
     }
 
     /**
-    * @brief "Resizes" the bit vector.
-    *
-    * sdsl bit vectors are immutable. Therefore resizing means creating a new bit vector and
-    * overwriting the previous bit member which is a member of our RLZ class. Should be safe.
-    *
-    * @param[in] bit_array [sdsl::bit_vector] Path to the bit vector to resize
-    * @param[in] bit_array [std::streamsize] The size (bytes) of the file which the bit vector should be resized. 
-    * @return void
-    * @note the bit array size passed should be in bits so multiple the bytes by 8.
-    * @warning Assumes that the original bit vector is empty.
-    */
-
-    void RLZ::bit_vector_resize(sdsl::bit_vector& bit_array, std::streamsize file_size)
-    {
-        sdsl::bit_vector new_bit_array(file_size * 8);
-        // This is safe.
-        bit_array = std::move(new_bit_array);
-    }
-
-
-    /**
     * @brief Compresses the sequence file in relation to the reference file.
     *
     * Creates a FM-index from the reference bit array which we query using the query bit array.
@@ -145,12 +124,7 @@ namespace RLZ_Algo {
     * 
     * @warning Supposedly cannot create a FM-index directly from bit array.
     * Have to first convert into string and then create the FM-index.
-    * Likely a bottleneck in the code. 
-    *
-    * @warning The FM-index of sdsl has the limitation that it does not give any way to find position of 
-    * last char match of pattern in the event that the pattern does not perfectly match a substring in the index.
-    * This means that a lot of redundant work is going to happen since we have to keep rechecking previous matches.
-    * Have to write a wrapper around sdsl FM-index or maybe look at r-index implementation and see if that does it, idk. [maybe addressed]
+    * Likely a bottleneck in the code. [I think this statement is true]
     *
     * @warning might be more efficient to serialize the stack if this work than create the vector from stack and then serialize
     */
@@ -184,6 +158,7 @@ namespace RLZ_Algo {
         long long int seq_size = static_cast<long long int>(seq_bit_array.size());
 
         // How to process the bits in reverse for backwards matching
+        spdlog::debug("**************************");
         for (long long int i = seq_size - 1 ; i >= 0; i--) 
         {
             char next_char = seq_bit_array[i] ? '1' : '0';
@@ -194,6 +169,12 @@ namespace RLZ_Algo {
             std::tuple<size_t,size_t> next_ranges = fm_support.backward_match(fm_index, previous_ranges, next_char);
             next_left = std::get<0>(next_ranges);
             next_right = std::get<1>(next_ranges);
+
+            spdlog::debug("prev left: {}", prev_left);
+            spdlog::debug("prev right: {}", prev_right);
+            spdlog::debug("next left: {}", next_left);
+            spdlog::debug("next right: {}", next_right);
+            spdlog::debug("**************************");
 
             // If same then that means no perfect match so we reset.
             if (next_left == next_right){
@@ -218,15 +199,17 @@ namespace RLZ_Algo {
         }
 
         // Pop from stack and store in seq_parse vector
-        int count = 0;
+        size_t bits_stored = 0;
         while (!seq_parse_stack.empty()) {
-            count += std::get<1>(seq_parse_stack.top());
+            bits_stored += std::get<1>(seq_parse_stack.top());
             seq_parse.emplace_back(seq_parse_stack.top());
             seq_parse_stack.pop();
         }
 
+        spdlog::debug("The sequence was encoded in {} bits", seq_size);
+        spdlog::debug("The rlz parse encodes for {} bits", bits_stored);
+
         serialize(seq_parse);
-        print_serialize(seq_parse);
     }
 
 
@@ -327,8 +310,8 @@ namespace RLZ_Algo {
             bit_size += len;
         }
 
-        // Should be wholly divisible by 8
-        bit_vector_resize(seq_bit_array, bit_size/8);
+        // Resize the array to be equal to the number of bits to be stored
+        seq_bit_array.resize(bit_size);
 
         // Get the sequence bits from the parse + reference bits
         int prev_pos = 0;
@@ -427,7 +410,7 @@ namespace RLZ_Algo {
     FM_Wrapper::~FM_Wrapper(){}
 
     /**
-    * @brief Extend backward match with FM-index
+    * @brief Extend backward match with FM-index (LF Mapping)
     *
     * A wrapper around sdsl::csa_wt<sdsl::wt_huff<sdsl::rrr_vector<127>>, 512, 1024> fm_index.
     * Calculates the new backwards search range after trying to match the next char (backwards)
@@ -466,7 +449,7 @@ namespace RLZ_Algo {
     * @brief Get corresponding location in reference via suffix array
     *
     * A wrapper around sdsl::csa_wt<sdsl::wt_huff<sdsl::rrr_vector<127>>, 512, 1024> fm_index.
-    * When the backwards search range becomes empty. Means there is no perfect match with the current pattern that is being processed.
+    * When the backwards search range becomes empty it means there is no perfect match with the current pattern that is being processed.
     * With the prior non-empty range we find one location of the previous perfect pattern match. This should always be next_left of backward_match
     *
     * @param[in] fm_index [sdsl::csa_wt<sdsl::wt_huff<sdsl::rrr_vector<127>>, 512, 1024>] the fm_index queried
