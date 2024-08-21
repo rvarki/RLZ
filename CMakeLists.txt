@@ -58,26 +58,19 @@ endif()
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${BUILD_TYPE_FLAGS}")
 #################################################################################
 # Check dependencies
+message(STATUS "The source directory of the project is ${CMAKE_SOURCE_DIR}")
 
-include_directories(${CMAKE_SOURCE_DIR}/include)
+# include_directories has been legacy since 2012 
+# https://stackoverflow.com/questions/13703647/how-to-properly-add-include-directories-with-cmake
+set(PROJECT_SRC_DIR ${CMAKE_SOURCE_DIR}/src)
+set(PROJECT_INCLUDE_DIR ${CMAKE_SOURCE_DIR}/include)
+set(THIRDPARTY_INCLUDE_DIR ${CMAKE_SOURCE_DIR}/thirdparty)
+
+message(STATUS "The include directories of the project is ${INCLUDE_DIRECTORIES}")
 
 # Log directory for external content builds
 make_directory(${CMAKE_CURRENT_BINARY_DIR}/logs)
 set(INSTALL_FILE  ${CMAKE_CURRENT_BINARY_DIR}/install.cmake)
-
-# CLI11 (Cannot figure how to properly check if it already has been install so it always installs)
-find_package(CLI11 QUIET)
-if (NOT TARGET CLI11::CLI11)
-    message(STATUS "CLI11 not found. Building as external content")
-    FetchContent_Declare(
-        cli11_proj
-        QUIET
-        GIT_REPOSITORY https://github.com/CLIUtils/CLI11.git
-        GIT_TAG v2.3.2
-    )
-
-    FetchContent_MakeAvailable(cli11_proj)
-endif()
 
 # DIVSUFSORT
 find_library(DIVSUFSORT_LIB divsufsort HINTS ${CMAKE_CURRENT_BINARY_DIR}/lib PATHS ${CONDA_PREFIX}/lib)
@@ -134,14 +127,13 @@ else()
     message(STATUS "sdsl sources found at ${SDSL_SRC}.")
 endif()
 
-add_library(rlz_algo ${CMAKE_SOURCE_DIR}/src/rlz_algo.cpp)
-target_include_directories(rlz_algo PUBLIC ${SDSL_SRC} ${DIVSUFSORT_SRC} ${DIVSUFSORT64_SRC})
+add_library(rlz_algo ${PROJECT_SRC_DIR}/rlz_algo.cpp)
+target_include_directories(rlz_algo PUBLIC ${SDSL_SRC} ${DIVSUFSORT_SRC} ${DIVSUFSORT64_SRC} ${PROJECT_INCLUDE_DIR})
 target_link_libraries(rlz_algo PUBLIC ${SDSL_LIB} ${DIVSUFSORT_LIB} ${DIVSUFSORT64_LIB})
 
 add_executable(rlz rlz.cpp)
-target_include_directories(rlz PUBLIC ${SDSL_SRC})
+target_include_directories(rlz PUBLIC ${SDSL_SRC} ${THIRDPARTY_INCLUDE_DIR} ${THIRDPARTY_INCLUDE_DIR}/CLI)
 target_link_libraries(rlz PUBLIC ${SDSL_LIB} rlz_algo)
-target_link_libraries(rlz PRIVATE CLI11::CLI11)
 
 install(TARGETS rlz TYPE RUNTIME)
 

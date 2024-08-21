@@ -1,5 +1,6 @@
-#include <CLI/CLI.hpp>
+#include <CLI11.hpp>
 #include "rlz_algo.h"
+#include "spdlog/spdlog.h"
 
 int main(int argc, char **argv) 
 {
@@ -16,7 +17,7 @@ int main(int argc, char **argv)
     app.set_version_flag("-v,--version", version);
     app.footer("Example usage:\n"
            "  Compress: ./rlz --ref reference.fasta --seq sequence.fasta\n"
-           "  Decompress: ./rlz --ref reference.fasta --seq sequence.fasta --decompress");
+           "  Decompress: ./rlz --decompress --ref reference.fasta --seq sequence.fasta");
     app.description("RLZ compression tool");
     CLI11_PARSE(app, argc, argv);
 
