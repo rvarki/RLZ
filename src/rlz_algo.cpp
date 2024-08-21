@@ -362,14 +362,14 @@ namespace RLZ_Algo {
     *
     */
 
-    void RLZ::save_as_binary_file(const std::string& infile)
-    {
-        std::ifstream input_file(infile, std::ios::binary);
-        std::ofstream output_file(infile + ".bin", std::ios::binary);
-        output_file << input_file.rdbuf();
-        input_file.close();
-        output_file.close();
-    }
+    // void RLZ::save_as_binary_file(const std::string& infile)
+    // {
+    //     std::ifstream input_file(infile, std::ios::binary);
+    //     std::ofstream output_file(infile + ".bin", std::ios::binary);
+    //     output_file << input_file.rdbuf();
+    //     input_file.close();
+    //     output_file.close();
+    // }
 
 
     /**
@@ -428,10 +428,15 @@ namespace RLZ_Algo {
         std::size_t next_left = fm_index.bwt.rank(std::get<0>(prev_backward_range), next_char);
         std::size_t next_right = fm_index.bwt.rank(std::get<1>(prev_backward_range), next_char);
 
-        // If 1 then have to move ranges by the 0 range offset
+        // There is a special (smaller) character appended so have to add 1 to the offset for both
+        // For bit 1 have to offset the range by the number of 0 bits. 
+        if (next_char == '0'){
+            next_left += 1;
+            next_right += 1;
+        }
         if (next_char == '1'){
-            next_left += this->rank0;
-            next_right += this->rank0;
+            next_left += this->rank0 + 1;
+            next_right += this->rank0 + 1;
         }
 
         return std::make_tuple(next_left,next_right);

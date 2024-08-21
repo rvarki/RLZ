@@ -2,6 +2,9 @@ include(FetchContent)
 
 cmake_minimum_required (VERSION 3.15)
 project (rlz)
+
+set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
 SET(VERSION_MAJOR "1")
 SET(VERSION_MINOR "0")
 SET(VERSION_PATCH "0")
