@@ -8,6 +8,8 @@
 #include <tuple>
 #include <cstdio>
 #include <stack>
+#include "spdlog/spdlog.h"
+#include "spdlog/stopwatch.h"
 
 namespace RLZ_Algo {
 
@@ -41,8 +43,16 @@ namespace RLZ_Algo {
 
     void RLZ::load_bit_vectors()
     {
+        spdlog::stopwatch sw_ref;
+        spdlog::debug("Starting to store the reference file as a bit vector");
         load_file_to_bit_vector(ref_file, ref_bit_array);
+        auto sw_ref_elapsed = sw_ref.elapsed();
+        spdlog::debug("Loaded file in {:.3} seconds", sw_ref_elapsed.count());
+        spdlog::stopwatch sw_seq;
+        spdlog::debug("Starting to store the sequence file as a bit vector");
         load_file_to_bit_vector(seq_file, seq_bit_array);
+        auto sw_seq_elapsed = sw_ref.elapsed();
+        spdlog::debug("Loaded file in {:.3} seconds", sw_seq_elapsed.count());
     }
 
 
@@ -61,6 +71,9 @@ namespace RLZ_Algo {
 
     void RLZ::load_file_to_bit_vector(const std::string& input_file, sdsl::bit_vector& bit_array)
     {
+        spdlog::stopwatch sw_convert;
+        spdlog::debug("Reading file and creating bit array");
+
         // std::ios::ate moves cursor to end of file
         std::ifstream file(input_file, std::ios::binary | std::ios::ate);
         if (!file) {
@@ -88,9 +101,16 @@ namespace RLZ_Algo {
         }
 
         file.close();
+        auto sw_convert_elapsed = sw_convert.elapsed();
+        spdlog::debug("Finished creating bit array in {:.3} seconds", sw_convert_elapsed.count());
 
-        //Save the bit vector to a file
+        spdlog::stopwatch sw_save;
+        spdlog::debug("Saving bit array sdsl object to file");
+        // Save the bit vector to a file
         sdsl::store_to_file(bit_array, input_file + ".bit_array.sdsl");
+        auto sw_save_elapsed = sw_save.elapsed();
+        spdlog::debug("Finished saving in {:.3} seconds", sw_save_elapsed.count());
+
     }
 
     /**
