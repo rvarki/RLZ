@@ -224,7 +224,8 @@ void RLZ::compress(int threads)
     // Pop from stack and store in seq_parse vector
     size_t bits_stored = 0;
     std::vector<std::tuple<uint64_t, size_t>> seq_parse;
-    for (size_t i = 0; i < threads; i++)
+    // Have to process the parse stacks in reverse order since the first stack contains the parse of the end of the sequence.
+    for (int i = threads - 1; i >= 0; i--)
     {
         while (!seq_parse_stack_vec[i].empty())
         {
