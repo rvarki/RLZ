@@ -14,7 +14,6 @@
 #include "spdlog/stopwatch.h"
 
 
-
 /**
 * @brief Constuctor of RLZ class.
 *
@@ -36,9 +35,10 @@ RLZ::RLZ(const std::string ref_file, const std::string seq_file): ref_file(ref_f
 RLZ::~RLZ(){}
 
 /**
-* @brief Loads both the reference and sequence content into bit vectors.
+* @brief Loads both the reference and sequence content into sdsl bit vectors.
 *
-* Calls load_file_to_bit_vector
+* Wrapper function that calls the load_file_to_bit_vector function 
+* on both the reference and sequence file to load them into bit vectors. 
 *
 * @return void
 */
@@ -59,9 +59,9 @@ void RLZ::load_bit_vectors()
 
 
 /**
-* @brief Loads the file content into bit vectors.
+* @brief Loads the file content into a bit vector.
 *
-* Loads the file content directly into sdsl bit vectors. Opens the input file in binary mode
+* Loads the file content directly into a sdsl bit vector. Opens the input file in binary mode
 * and moves pointer at end of file to get file size quickly. We then resize the bit vector
 * to be large enough to hold the file content in bits. Read file byte by byte and store
 * in bit vector.   
@@ -109,14 +109,40 @@ void RLZ::load_file_to_bit_vector(const std::string& input_file, sdsl::bit_vecto
     spdlog::stopwatch sw_save;
     spdlog::debug("Saving bit array sdsl object to file");
     // Save the bit vector to a file
-    sdsl::store_to_file(bit_array, input_file + ".bit_array.sdsl");
+    sdsl::store_to_file(bit_array, input_file + ".sdsl");
     auto sw_save_elapsed = sw_save.elapsed();
     spdlog::debug("Finished saving in {:.3} seconds", sw_save_elapsed.count());
 }
 
 /**
-* @brief Parses the sequence bit vector in accordance with RLZ
+* @brief Parses the sequence file in relation to the reference file
 *
+* This function does the RLZ parsing of the sequence file. It currently works at the
+* "psuedo" bit level. To clarify, it currently processes the string representation of the bits of the 
+* sequence file. Working at bit level allows us to compress all types of files.
+*
+* RLZ algorithm tries to greedily find the longest substring match within the reference starting from the
+* first character in the sequence character such that the RLZ parse in the end contains (pos, len) pairs
+* in relation to the reference such that the sequence can be reconstructed from only the RLZ parse and the reference
+* file. It is a O(n) algorithm. The size is the reference file + the RLZ parse.
+*
+* The algorithm implemented here is as follows.
+* 1. Starting from the last bit of the sequence file or sequence file chunk, check if bit matches the reference
+* (via backwards match with FM-index) 
+* 2a. If match, check if next bit also matches (ex. 001. I know that 1 matches then check if 01 matches etc...)
+* 2b. If match and end of sequence file or sequence file chunk, push current (pos,len) pair to parse stack
+* 2c. If mismatch, push (prev pos, len - 1) to parse stack. Reset search from bit that caused mismatch.
+*
+* Push to parse stack since we process the string in reverse. Popping from stack gives correct order.
+*
+* @param [in] fm_index [sdsl::csa_wt<sdsl::wt_huff<sdsl::rrr_vector<127>>, 512, 1024>] the fm-index of the reference
+* @param [in] fm_support [FM_Wrapper] Utility object that allows us to do search and locate queries with fm-index.
+* @param [in] seq_parse_stack_vec [std::vector<std::stack<std::tuple<uint64_t, size_t>>>] empty RLZ parse stacks equal to number of threads
+* @param [in] num_bits_to_process [size_t] the number of bits that should be processed. Useful for the OpenMP parallelization.
+* @param [in] loop_iter [size_t] the loop iteration. Useful for OpenMP and making sure we are thread-safe.
+* @param [in] num_threads [size_t] the total number of threads allocated.
+*
+* @return void
 */
 
 void RLZ::parse(const sdsl::csa_wt<sdsl::wt_huff<sdsl::rrr_vector<127>>, 512, 1024>& fm_index,
@@ -144,6 +170,7 @@ void RLZ::parse(const sdsl::csa_wt<sdsl::wt_huff<sdsl::rrr_vector<127>>, 512, 10
     else
         end_loc = (seq_size - 1) - ((loop_iter + 1) * num_bits_to_process);
 
+    // Process the file in reverse for backwards matching with FM-index.
     for (long long int i = start_loc; i > end_loc; i--) 
     {
         char next_char = seq_bit_array[i] ? '1' : '0';
@@ -181,17 +208,26 @@ void RLZ::parse(const sdsl::csa_wt<sdsl::wt_huff<sdsl::rrr_vector<127>>, 512, 10
 /**
 * @brief Compresses the sequence file in relation to the reference file.
 *
-* Creates a FM-index from the reference bit array which we query using the query bit array.
-* We first convert the reference bit array into a string so that we can create the FM-index.
-* We query the index with the sequence. When the sequence does not have a match, we add the
-* last matching ref position of the sequence and the length of the match to the parse. Then we 
-* restart the match at the last mismatch position. The parse gets serialized afterwards. 
-* 
-* @warning Supposedly cannot create a FM-index directly from bit array.
-* Have to first convert into string and then create the FM-index.
-* Likely a bottleneck in the code. [I think this statement is true]
+* Creates a FM-index from the reference bit array which we query using the sequence bit array.
+* We first convert the reference bit array into its string representation so that we can create the FM-index.
+* We query the index one bit at time from the sequence bit array. When the sequence bit does not have a match, 
+* we add the last matching ref position of the sequence and the length of the match to the parse. Then we 
+* restart the match at the last mismatch position. The parse is stored on a stack due to processing the bits 
+* in reverese (backwards match with FM-index). Popping from stack gives correct order. The parse is ultimately
+* stored in a vector in the correct order. The parse at the end is serialized to a file.
 *
-* @warning might be more efficient to serialize the stack if this work than create the vector from stack and then serialize
+* @param [in] threads [int] The number of threads provided by the user.
+*
+* @return void
+*
+* @warning Providing multiple threads changes the output of the RLZ parse slightly. 
+* Might create two phrases at chunk boundaries if phrase spans chunk boundary. For proper RLZ parse should run with 1 thread.
+* 
+* @note Supposedly cannot create a FM-index directly from bit array.
+* Have to first convert into the reference bits into their string representation and then create the FM-index.
+* Likely a bottleneck in the code as have to store a bit as a byte. [check if there is a way to build bit level FM-index]
+*
+* @note Might be more efficient to serialize the stack then create the vector [implementation detail]
 */
 
 void RLZ::compress(int threads)
@@ -199,9 +235,11 @@ void RLZ::compress(int threads)
     sdsl::csa_wt<sdsl::wt_huff<sdsl::rrr_vector<127>>, 512, 1024> fm_index;
     std::string binary_reference_text;
 
+    // Convert the reference bit array into its string representation
     for (size_t i = 0; i < ref_bit_array.size(); ++i) {
         binary_reference_text += (ref_bit_array[i] ? '1' : '0');
     }
+
     // Creates the FM-index
     construct_im(fm_index, binary_reference_text, 1);
 
@@ -249,6 +287,7 @@ void RLZ::compress(int threads)
 * 
 * @param[in] seq_parse [std::vector<std::tuple<uint64_t, size_t>>] The parse of the seq <(binary ref pos,len),(binary ref pos,len),(binary ref pos,len)... >
 *
+* @return void
 */
 
 void RLZ::serialize(const std::vector<std::tuple<uint64_t, size_t>>& seq_parse)
@@ -356,7 +395,7 @@ std::vector<std::tuple<uint64_t, size_t>> RLZ::deserialize()
 void RLZ::decompress()
 {
     std::vector<std::tuple<uint64_t, size_t>> seq_parse = deserialize();
-    sdsl::load_from_file(ref_bit_array, ref_file + ".bit_array.sdsl");
+    sdsl::load_from_file(ref_bit_array, ref_file + ".sdsl");
     
     int bit_size = 0;
     for (const auto& [pos, len] : seq_parse){
