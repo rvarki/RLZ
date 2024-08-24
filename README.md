@@ -2,7 +2,7 @@
 
 ## Description
 
-This software computes the Relative Lempel Ziv (RLZ) parse of the target file using a reference file. The software should work for any type of file whether that be FASTA files, English files, etc... However, currently the decompression expects that the files were originally ASCII (8 bit) encoded.
+This software computes the Relative Lempel Ziv (RLZ) parse of the target sequence file using a reference file. The software should work for any type of file whether that be FASTA files, English files, etc... However, currently the decompression expects that the files were originally ASCII (8 bit) encoded.
 
 ## Algorithm Workflow
 
@@ -24,6 +24,7 @@ To compress the target sequence file in relation to a reference file, the softwa
 - [CMake](https://cmake.org/) 3.15 or higher.
 - GCC 9+
 - C++17-compatible compiler.
+- OpenMP
 
 ## Getting Started
 
@@ -47,13 +48,47 @@ After building the project, an executable named rlz will be created in the build
 
 ### Example
 
+In this section, we will go through a small example. In the data directory, we have provided an example reference and target sequence file that were derived from the English text in the [Pizza&Chili Corpus](https://pizzachili.dcc.uchile.cl/texts/nlang/).
+
+1. To compress the sequence file, run the following command from the build directory
+
+```
+./rlz -r ../data/english_ref.txt -s ../data/english_seq.txt
+```
+
+This command will produce the following files in the data directory: `english_ref.txt.sdsl`, `english_seq.txt.sdsl`, and `english_seq.txt.rlz`. The .sdsl files are the bit vectors of the reference and sequence files that are written to file. The .rlz file contains the RLZ parse.
+
+> [!NOTE]
+> Multithreading is supported in the compression step with the -t [num. of threads] option which can significantly make this step faster. However, the RLZ parse is slightly different since we cannot identify phrases that potentially span where the file was split. Potentially might have an additional thread number of parse entries.
+
+> [!NOTE]
+> The compression ratio is quite high in this example. That is due to the example being small and not optimizing how the parse is written to file.
+
+2. To decompress the file, run the following command
+
+```
+./rlz -r ../data/english_ref.txt -s ../data/english_seq.txt -d
+```
+This command should produce a file called `english_seq.txt.out` in the data directory. This is the decompressed sequence file.
+
+3. Check to see if the file decompressed correctly
+```
+diff ../data/english_seq.txt ../data/english_seq.txt.out
+```
+
+There should be no output from this command if compressed and decompressed correctly. 
+
+> [!NOTE]
+> To get more information from the tool. Run the command with --verbose flag.
+
 ### License
 
 This project is licensed under the MIT License - see the [LICENSE](https://github.com/rvarki/rlz/blob/main/LICENSE) file for details
 
 ## Dependencies
-- [CLI11](https://github.com/CLIUtils/CLI11)
 - [SDSL](https://github.com/simongog/sdsl-lite)
+- [CLI11](https://github.com/CLIUtils/CLI11)
+- [spdlog](https://github.com/gabime/spdlog)
 
 ## Acknowledgements
 
