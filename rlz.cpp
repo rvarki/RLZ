@@ -6,7 +6,7 @@
 
 int main(int argc, char **argv) 
 {
-    CLI::App app("rlz - An implementation of RLZ that compresses a sequence file using a reference file.\n\nImplemented by Rahul Varki and Dhruv R. Makwana");
+    CLI::App app("rlz - An implementation of RLZ that compresses a sequence file using a reference file.\n\nImplemented by Rahul Varki");
 
     std::string ref_file;
     std::string seq_file;
