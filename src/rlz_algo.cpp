@@ -349,7 +349,7 @@ void RLZ::decompress()
     std::vector<std::tuple<uint64_t, size_t>> seq_parse = deserialize();
     sdsl::load_from_file(ref_bit_array, ref_file + ".sdsl");
     
-    int bit_size = 0;
+    size_t bit_size = 0;
     for (const auto& [pos, len] : seq_parse){
         bit_size += len;
     }
@@ -360,11 +360,11 @@ void RLZ::decompress()
     seq_bit_array.resize(bit_size);
 
     // Get the sequence bits from the parse + reference bits
-    int prev_pos = 0;
+    size_t prev_pos = 0;
     for (const auto& [pos, len] : seq_parse){
-        int curr_pos = prev_pos + len;
-        int len_count = 0;
-        for (int i = prev_pos; i < curr_pos; ++i){
+        size_t curr_pos = prev_pos + len;
+        size_t len_count = 0;
+        for (size_t i = prev_pos; i < curr_pos; ++i){
             seq_bit_array[i] = ref_bit_array[pos + len_count];
             len_count++;
         }
