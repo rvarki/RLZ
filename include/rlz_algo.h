@@ -30,16 +30,13 @@ class RLZ {
 
         void decompress();
         void load_bit_vectors();
-
-        void bits_to_str(sdsl::bit_vector bit_array, std::string prefix);
-        //void clean();
-        //void save_as_binary_file(const std::string& infile);
-
-    private:
         void load_file_to_bit_vector(const std::string& input_file, sdsl::bit_vector& bit_array);
         void serialize(const std::vector<std::tuple<uint64_t, size_t>>& seq_parse);
-        //void print_serialize(const std::vector<std::tuple<uint64_t, size_t>>& seq_parse);
         std::vector<std::tuple<uint64_t, size_t>> deserialize();
+
+        void bits_to_str(sdsl::bit_vector bit_array, std::string prefix);
+        void print_serialize(const std::vector<std::tuple<uint64_t, size_t>>& seq_parse);
+        void clean();
 };
 
 #endif  // RLZ_ALGO_H

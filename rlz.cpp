@@ -11,6 +11,7 @@ int main(int argc, char **argv)
     std::string seq_file;
     bool decompress = false;
     bool verbose = false;
+    bool clean = false;
     int threads = 1;
     std::string version = "Version: 1.0.0";
 
@@ -19,6 +20,7 @@ int main(int argc, char **argv)
     app.add_option("-t,--threads", threads, "Number of threads")->configurable();
     app.add_flag("-d,--decompress", decompress, "Decompress the RLZ parse into the original sequence file")->configurable();
     app.add_flag("--verbose", verbose, "Verbose output")->configurable();
+    app.add_flag("--clean", clean, "Remove RLZ output files")->configurable();
     app.set_version_flag("-v,--version", version);
     app.footer("Example usage:\n"
            "  Compress: ./rlz --ref reference.fasta --seq sequence.fasta\n"
@@ -27,6 +29,8 @@ int main(int argc, char **argv)
     CLI11_PARSE(app, argc, argv);
 
     if (verbose) { spdlog::set_level(spdlog::level::debug); }
+
+    if (clean) {RLZ main_parser(ref_file, seq_file); main_parser.clean(); return 0;}
 
     if (decompress)
     {

@@ -250,8 +250,8 @@ void RLZ::compress(int threads)
     std::vector<std::stack<std::tuple<uint64_t, size_t>>> seq_parse_stack_vec(threads);
     size_t num_bits_to_process = seq_bit_array.size() / threads;  // Integer division
 
-    // Comment out later (Testing only)
-    bits_to_str(seq_bit_array, ".orig.bits");
+    // Comment (Testing only)
+    // bits_to_str(seq_bit_array, ".orig.bits");
 
     #pragma omp parallel for schedule(static)
     for (size_t i = 0; i < threads; i++)
@@ -277,6 +277,9 @@ void RLZ::compress(int threads)
     spdlog::debug("The rlz parse encodes for {} bits", bits_stored);
 
     serialize(seq_parse);
+
+    // Comment (Testing only)
+    // print_serialize(seq_parse);
 }
 
 /**
@@ -302,57 +305,6 @@ void RLZ::serialize(const std::vector<std::tuple<uint64_t, size_t>>& seq_parse)
     ofs.write(reinterpret_cast<const char*>(seq_parse.data()), size * sizeof(std::tuple<uint64_t, size_t>));
     ofs.close();
 }
-
-
-/**
-* @brief Converts the bits to character representation (Testing)
-*
-*
-*/
-
-void RLZ::bits_to_str(sdsl::bit_vector bit_array, std::string ext)
-{
-    std::string bitstr;
-    for (size_t i = 0; i < bit_array.size(); ++i) {
-        bitstr += (bit_array[i] ? '1' : '0');
-    }
-
-    sdsl::rank_support_v<1> b_rank1(&bit_array);
-    sdsl::rank_support_v<0> b_rank0(&bit_array);
-    spdlog::debug("^^^^^^^^^^^^^^^^^^^^^^^^^");
-    spdlog::debug("Number of 1s: {}", b_rank1(bit_array.size()));
-    spdlog::debug("Number of 0s: {}", b_rank0(bit_array.size()));
-    spdlog::debug("^^^^^^^^^^^^^^^^^^^^^^^^^");
-
-    std::ofstream outfile(seq_file + ext);
-    outfile << bitstr;
-    outfile.close();
-}
-
-/**
-* @brief Write the non-binary serialization of the sequence parse to a file.
-*
-* The sequence parse contains tuples (binary ref pos, size) that can reconstruct the sequence file given the reference.
-* We write the non-binary serialization to a file. Testing purposes.
-* 
-* @param[in] seq_parse [std::vector<std::tuple<uint64_t, size_t>>] The parse of the seq <(binary ref pos,len),(binary ref pos,len),(binary ref pos,len)... >
-*
-*/
-
-// void RLZ::print_serialize(const std::vector<std::tuple<uint64_t, size_t>>& seq_parse)
-// {
-//     std::ofstream ofs(seq_file + ".readable.rlz");
-//     if (!ofs) {
-//         spdlog::error("Error opening {}", seq_file + ".readable.rlz");
-//         std::exit(EXIT_FAILURE);
-//     }
-
-//     for (const auto& [pos, len] : seq_parse){
-//         ofs << "Position: " << pos << "  Length: " << len << std::endl;
-//     }
-
-//     ofs.close();
-// }
 
 
 /**
@@ -419,8 +371,8 @@ void RLZ::decompress()
         prev_pos = curr_pos;
     }
 
-    // Comment out later (Testing only)
-    bits_to_str(seq_bit_array, ".decompress.bits");
+    // Comment (Testing only)
+    // bits_to_str(seq_bit_array, ".decompress.bits");
 
     std::ofstream output_file(seq_file + ".out");
     if (!output_file) {
@@ -451,36 +403,94 @@ void RLZ::decompress()
     output_file.close();
 }
 
+
 /**
-* @brief Saves regular file as binary
+* @brief Converts the bits to its corresponding character representation
 *
-* Saves input file as binary file. Used for testing purposes
+* Prints out debug info about how many 0 and 1s are in the bit array.
+* Writes the string representation of the bits to a file.
+* Testing purposes only.
+* 
+* @param [in] bit_array [sdsl::bit_vector] the bit array of interest
+* @param [in] ext [std::string] the extension of the file
+*
 *
 */
 
-// void RLZ::save_as_binary_file(const std::string& infile)
-// {
-//     std::ifstream input_file(infile, std::ios::binary);
-//     std::ofstream output_file(infile + ".bin", std::ios::binary);
-//     output_file << input_file.rdbuf();
-//     input_file.close();
-//     output_file.close();
-// }
+void RLZ::bits_to_str(sdsl::bit_vector bit_array, std::string ext)
+{
+    std::string bitstr;
+    for (size_t i = 0; i < bit_array.size(); ++i) {
+        bitstr += (bit_array[i] ? '1' : '0');
+    }
+
+    sdsl::rank_support_v<1> b_rank1(&bit_array);
+    sdsl::rank_support_v<0> b_rank0(&bit_array);
+    spdlog::debug("^^^^^^^^^^^^^^^^^^^^^^^^^");
+    spdlog::debug("Number of 1s: {}", b_rank1(bit_array.size()));
+    spdlog::debug("Number of 0s: {}", b_rank0(bit_array.size()));
+    spdlog::debug("^^^^^^^^^^^^^^^^^^^^^^^^^");
+
+    std::ofstream ofs(seq_file + ext);
+    if (!ofs) {
+        spdlog::error("Error opening {}", seq_file + ext);
+        std::exit(EXIT_FAILURE);
+    }
+    ofs << bitstr;
+    ofs.close();
+}
+
+/**
+* @brief Write the non-binary serialization of the sequence parse to a file.
+*
+* The sequence parse contains tuples (binary ref pos, size) that can reconstruct the sequence file given the reference.
+* We write the non-binary serialization to a file. Testing purposes only.
+* 
+* @param[in] seq_parse [std::vector<std::tuple<uint64_t, size_t>>] The parse of the seq <(binary ref pos,len),(binary ref pos,len),(binary ref pos,len)... >
+*
+* @return void
+*/
+
+void RLZ::print_serialize(const std::vector<std::tuple<uint64_t, size_t>>& seq_parse)
+{
+    std::ofstream ofs(seq_file + ".readable.rlz");
+    if (!ofs) {
+        spdlog::error("Error opening {}", seq_file + ".readable.rlz");
+        std::exit(EXIT_FAILURE);
+    }
+
+    for (const auto& [pos, len] : seq_parse){
+        ofs << "Position: " << pos << "  Length: " << len << std::endl;
+    }
+
+    ofs.close();
+}
 
 
 /**
 * @brief Cleans some intermediate file
 *
-* Removes intermediate files during compression for faster testing
+* Removes intermediate files for faster testing
 *
-* @warning not safe but yolo
+* @return void
 */
 
-// void RLZ::clean()
-// {
-//     std::remove((ref_file + ".bit_array.sdsl").c_str());
-//     std::remove((seq_file + ".bit_array.sdsl").c_str());
-//     std::remove((seq_file + ".rlz").c_str());
-// }
+void RLZ::clean()
+{
+    std::remove((ref_file + ".sdsl").c_str());
+    spdlog::info("Removed {} if it existed", ref_file + ".sdsl");
+    std::remove((seq_file + ".sdsl").c_str());
+    spdlog::info("Removed {} if it existed", seq_file + ".sdsl");
+    std::remove((seq_file + ".rlz").c_str());
+    spdlog::info("Removed {} if it existed", seq_file + ".rlz");
+    std::remove((seq_file + ".readable.rlz").c_str());
+    spdlog::info("Removed {} if it existed", seq_file + ".readable.rlz");
+    std::remove((seq_file + ".orig.bits").c_str());
+    spdlog::info("Removed {} if it existed", seq_file + ".orig.bits");
+    std::remove((seq_file + ".decompress.bits").c_str());
+    spdlog::info("Removed {} if it existed", seq_file + ".decompress.bits");
+    std::remove((seq_file + ".out").c_str());
+    spdlog::info("Removed {} if it existed", seq_file + ".out");
+}
 
 
