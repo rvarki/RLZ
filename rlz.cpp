@@ -2,6 +2,7 @@
 #include "rlz_algo.h"
 #include "spdlog/spdlog.h"
 #include "spdlog/stopwatch.h"
+#include <filesystem> // Note that this requires at least gcc 9
 
 int main(int argc, char **argv) 
 {
@@ -70,6 +71,17 @@ int main(int argc, char **argv)
         spdlog::debug("Compression function finished in {:.3} seconds", sw_compress_elapsed.count());
         spdlog::info("Finished compressing the sequence file");
         spdlog::info("Compressed in {:.3} seconds", elapsed.count());
+        spdlog::info("#############################################################");
+        spdlog::info("File Size Statistics:");
+        uintmax_t ref_size = std::filesystem::file_size(ref_file); //bytes
+        uintmax_t seq_size = std::filesystem::file_size(seq_file); //bytes
+        uintmax_t parse_size = std::filesystem::file_size(seq_file + ".rlz"); //bytes
+        double comp_ratio = static_cast<double>(ref_size + parse_size) / 
+                    static_cast<double>(ref_size + seq_size) * 100;
+        spdlog::info("The reference (ref) file provided: {} is {} bytes", ref_file, ref_size);
+        spdlog::info("The sequence (seq) file provided: {} is {} bytes", seq_file, seq_size);
+        spdlog::info("The parse (parse) file created: {} is {} bytes", seq_file + ".rlz", parse_size);
+        spdlog::info("Compression ratio [((ref + parse)/(ref + seq)) * 100]: {:.3}%", comp_ratio);
     }
 
     return 0;
