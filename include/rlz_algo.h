@@ -23,7 +23,7 @@ class RLZ {
         void parse(const sdsl::csa_wt<sdsl::wt_huff<sdsl::rrr_vector<127>>, 512, 1024>& fm_index,
             FM_Wrapper& fm_support,
             const sdsl::bit_vector& seq_bit_array,
-            std::vector<std::stack<std::tuple<uint64_t, size_t>>>& seq_parse_stack_vec,
+            std::vector<std::stack<std::tuple<uint64_t, uint64_t>>>& seq_parse_stack_vec,
             size_t num_bits_to_process,
             size_t loop_iter,
             size_t num_threads);
@@ -31,11 +31,11 @@ class RLZ {
         void decompress();
         void load_bit_vectors();
         void load_file_to_bit_vector(const std::string& input_file, sdsl::bit_vector& bit_array);
-        void serialize(const std::vector<std::tuple<uint64_t, size_t>>& seq_parse);
-        std::vector<std::tuple<uint64_t, size_t>> deserialize();
+        void serialize(const std::vector<std::tuple<uint64_t, uint64_t>>& seq_parse);
+        std::vector<std::tuple<uint64_t, uint64_t>> deserialize();
 
         void bits_to_str(sdsl::bit_vector bit_array, std::string prefix);
-        void print_serialize(const std::vector<std::tuple<uint64_t, size_t>>& seq_parse);
+        void print_serialize(const std::vector<std::tuple<uint64_t, uint64_t>>& seq_parse);
         void clean();
 };
 
