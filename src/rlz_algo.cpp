@@ -287,7 +287,10 @@ void RLZ::compress(int threads)
 *
 * The sequence parse contains tuples (binary ref pos, size) that can reconstruct the sequence file given the reference.
 * We serialize the parse vector into binary file called seq_file_name.rlz
-* 
+*
+* File content of the .rlz file
+* (uint64_t byte size num of pair) (uint64_t byte size pos) (uint64_t byte size len) (uint64_t byte size pos) (uint64_t byte size len) ...
+*  
 * @param[in] seq_parse [std::vector<std::tuple<uint64_t, uint64_t>>] The parse of the seq <(binary ref pos,len),(binary ref pos,len),(binary ref pos,len)... >
 *
 * @return void
@@ -302,7 +305,11 @@ void RLZ::serialize(const std::vector<std::tuple<uint64_t, uint64_t>>& seq_parse
     }
     size_t size = seq_parse.size();
     ofs.write(reinterpret_cast<const char*>(&size), sizeof(size));
-    ofs.write(reinterpret_cast<const char*>(seq_parse.data()), size * sizeof(std::tuple<uint64_t, uint64_t>));
+    for (size_t i = 0; i < size; i++)
+    {
+        ofs.write(reinterpret_cast<const char*>(&std::get<0>(seq_parse[i])), sizeof(uint64_t));
+        ofs.write(reinterpret_cast<const char*>(&std::get<1>(seq_parse[i])), sizeof(uint64_t));
+    }
     ofs.close();
 }
 
@@ -323,12 +330,25 @@ std::vector<std::tuple<uint64_t, uint64_t>> RLZ::deserialize()
         spdlog::error("Error opening {}", seq_file + ".rlz");
         std::exit(EXIT_FAILURE);
     }
-    size_t size;
+    uint64_t size;
     std::vector<std::tuple<uint64_t, uint64_t>> seq_parse;
 
-    ifs.read(reinterpret_cast<char*>(&size), sizeof(size));
-    seq_parse.resize(size);
-    ifs.read(reinterpret_cast<char*>(seq_parse.data()), size * sizeof(std::tuple<uint64_t, uint64_t>));
+    ifs.read(reinterpret_cast<char*>(&size), sizeof(uint64_t));
+    seq_parse.reserve(size);
+    std::tuple<uint64_t, uint64_t> elem;
+    uint64_t val;
+
+    for (size_t i = 0; i < 2 * size; i++)
+    {
+        ifs.read(reinterpret_cast<char*>(&val), sizeof(uint64_t));
+        if (i % 2 == 0){
+            std::get<0>(elem) = val;
+        }
+        else{
+            std::get<1>(elem) = val;
+            seq_parse.emplace_back(elem);
+        }
+    }
     ifs.close();
 
     return seq_parse;
