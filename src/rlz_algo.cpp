@@ -35,30 +35,6 @@ RLZ::RLZ(const std::string ref_file, const std::string seq_file): ref_file(ref_f
 RLZ::~RLZ(){}
 
 /**
-* @brief Loads both the reference and sequence content into sdsl bit vectors.
-*
-* Wrapper function that calls the load_file_to_bit_vector function 
-* on both the reference and sequence file to load them into bit vectors. 
-*
-* @return void
-*/
-
-void RLZ::load_bit_vectors()
-{
-    spdlog::stopwatch sw_ref;
-    spdlog::debug("Starting to store the reference file as a bit vector");
-    load_file_to_bit_vector(ref_file, ref_bit_array);
-    auto sw_ref_elapsed = sw_ref.elapsed();
-    spdlog::debug("Loaded file in {:.3} seconds", sw_ref_elapsed.count());
-    spdlog::stopwatch sw_seq;
-    spdlog::debug("Starting to store the sequence file as a bit vector");
-    load_file_to_bit_vector(seq_file, seq_bit_array);
-    auto sw_seq_elapsed = sw_ref.elapsed();
-    spdlog::debug("Loaded file in {:.3} seconds", sw_seq_elapsed.count());
-}
-
-
-/**
 * @brief Loads the file content into a bit vector.
 *
 * Loads the file content directly into a sdsl bit vector. Opens the input file in binary mode
@@ -106,12 +82,12 @@ void RLZ::load_file_to_bit_vector(const std::string& input_file, sdsl::bit_vecto
     auto sw_convert_elapsed = sw_convert.elapsed();
     spdlog::debug("Finished creating bit array in {:.3} seconds", sw_convert_elapsed.count());
 
-    spdlog::stopwatch sw_save;
-    spdlog::debug("Saving bit array sdsl object to file");
-    // Save the bit vector to a file
-    sdsl::store_to_file(bit_array, input_file + ".sdsl");
-    auto sw_save_elapsed = sw_save.elapsed();
-    spdlog::debug("Finished saving in {:.3} seconds", sw_save_elapsed.count());
+    // spdlog::stopwatch sw_save;
+    // spdlog::debug("Saving bit array sdsl object to file");
+    //// Save the bit vector to a file
+    // sdsl::store_to_file(bit_array, input_file + ".sdsl");
+    // auto sw_save_elapsed = sw_save.elapsed();
+    // spdlog::debug("Finished saving in {:.3} seconds", sw_save_elapsed.count());
 }
 
 /**
@@ -367,7 +343,6 @@ std::vector<std::tuple<uint64_t, uint64_t>> RLZ::deserialize()
 void RLZ::decompress()
 {
     std::vector<std::tuple<uint64_t, uint64_t>> seq_parse = deserialize();
-    sdsl::load_from_file(ref_bit_array, ref_file + ".sdsl");
     
     size_t bit_size = 0;
     for (const auto& [pos, len] : seq_parse){

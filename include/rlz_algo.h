@@ -29,7 +29,6 @@ class RLZ {
             size_t num_threads);
 
         void decompress();
-        void load_bit_vectors();
         void load_file_to_bit_vector(const std::string& input_file, sdsl::bit_vector& bit_array);
         void serialize(const std::vector<std::tuple<uint64_t, uint64_t>>& seq_parse);
         std::vector<std::tuple<uint64_t, uint64_t>> deserialize();
