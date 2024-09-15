@@ -137,7 +137,7 @@ void RLZ::load_file_to_bit_vector(const std::string& input_file, sdsl::bit_vecto
 *
 * @param [in] fm_index [sdsl::csa_wt<sdsl::wt_huff<sdsl::rrr_vector<127>>, 512, 1024>] the fm-index of the reference
 * @param [in] fm_support [FM_Wrapper] Utility object that allows us to do search and locate queries with fm-index.
-* @param [in] seq_parse_stack_vec [std::vector<std::stack<std::tuple<uint64_t, size_t>>>] empty RLZ parse stacks equal to number of threads
+* @param [in] seq_parse_stack_vec [std::vector<std::stack<std::tuple<uint64_t, uint64_t>>>] empty RLZ parse stacks equal to number of threads
 * @param [in] num_bits_to_process [size_t] the number of bits that should be processed. Useful for the OpenMP parallelization.
 * @param [in] loop_iter [size_t] the loop iteration. Useful for OpenMP and making sure we are thread-safe.
 * @param [in] num_threads [size_t] the total number of threads allocated.
@@ -148,7 +148,7 @@ void RLZ::load_file_to_bit_vector(const std::string& input_file, sdsl::bit_vecto
 void RLZ::parse(const sdsl::csa_wt<sdsl::wt_huff<sdsl::rrr_vector<127>>, 512, 1024>& fm_index,
         FM_Wrapper& fm_support,
         const sdsl::bit_vector& seq_bit_array,
-        std::vector<std::stack<std::tuple<uint64_t, size_t>>>& seq_parse_stack_vec,
+        std::vector<std::stack<std::tuple<uint64_t, uint64_t>>>& seq_parse_stack_vec,
         size_t num_bits_to_process,
         size_t loop_iter,
         size_t num_threads)
@@ -247,7 +247,7 @@ void RLZ::compress(int threads)
     fm_support.rank0 = fm_index.bwt.rank(fm_index.size(), '0');
     fm_support.rank1 = fm_index.bwt.rank(fm_index.size(), '1');
 
-    std::vector<std::stack<std::tuple<uint64_t, size_t>>> seq_parse_stack_vec(threads);
+    std::vector<std::stack<std::tuple<uint64_t, uint64_t>>> seq_parse_stack_vec(threads);
     size_t num_bits_to_process = seq_bit_array.size() / threads;  // Integer division
 
     // Comment (Testing only)
@@ -261,7 +261,7 @@ void RLZ::compress(int threads)
 
     // Pop from stack and store in seq_parse vector
     size_t bits_stored = 0;
-    std::vector<std::tuple<uint64_t, size_t>> seq_parse;
+    std::vector<std::tuple<uint64_t, uint64_t>> seq_parse;
     // Have to process the parse stacks in reverse order since the first stack contains the parse of the end of the sequence.
     for (int i = threads - 1; i >= 0; i--)
     {
@@ -287,13 +287,16 @@ void RLZ::compress(int threads)
 *
 * The sequence parse contains tuples (binary ref pos, size) that can reconstruct the sequence file given the reference.
 * We serialize the parse vector into binary file called seq_file_name.rlz
-* 
-* @param[in] seq_parse [std::vector<std::tuple<uint64_t, size_t>>] The parse of the seq <(binary ref pos,len),(binary ref pos,len),(binary ref pos,len)... >
+*
+* File content of the .rlz file
+* (uint64_t byte size num of pair) (uint64_t byte size pos) (uint64_t byte size len) (uint64_t byte size pos) (uint64_t byte size len) ...
+*  
+* @param[in] seq_parse [std::vector<std::tuple<uint64_t, uint64_t>>] The parse of the seq <(binary ref pos,len),(binary ref pos,len),(binary ref pos,len)... >
 *
 * @return void
 */
 
-void RLZ::serialize(const std::vector<std::tuple<uint64_t, size_t>>& seq_parse)
+void RLZ::serialize(const std::vector<std::tuple<uint64_t, uint64_t>>& seq_parse)
 {
     std::ofstream ofs(seq_file + ".rlz", std::ios::binary);
     if (!ofs) {
@@ -302,7 +305,11 @@ void RLZ::serialize(const std::vector<std::tuple<uint64_t, size_t>>& seq_parse)
     }
     size_t size = seq_parse.size();
     ofs.write(reinterpret_cast<const char*>(&size), sizeof(size));
-    ofs.write(reinterpret_cast<const char*>(seq_parse.data()), size * sizeof(std::tuple<uint64_t, size_t>));
+    for (size_t i = 0; i < size; i++)
+    {
+        ofs.write(reinterpret_cast<const char*>(&std::get<0>(seq_parse[i])), sizeof(uint64_t));
+        ofs.write(reinterpret_cast<const char*>(&std::get<1>(seq_parse[i])), sizeof(uint64_t));
+    }
     ofs.close();
 }
 
@@ -316,19 +323,32 @@ void RLZ::serialize(const std::vector<std::tuple<uint64_t, size_t>>& seq_parse)
 * @return Return the vector.
 */
 
-std::vector<std::tuple<uint64_t, size_t>> RLZ::deserialize()
+std::vector<std::tuple<uint64_t, uint64_t>> RLZ::deserialize()
 {
     std::ifstream ifs(seq_file + ".rlz", std::ios::binary);
     if (!ifs) {
         spdlog::error("Error opening {}", seq_file + ".rlz");
         std::exit(EXIT_FAILURE);
     }
-    size_t size;
-    std::vector<std::tuple<uint64_t, size_t>> seq_parse;
+    uint64_t size;
+    std::vector<std::tuple<uint64_t, uint64_t>> seq_parse;
 
-    ifs.read(reinterpret_cast<char*>(&size), sizeof(size));
-    seq_parse.resize(size);
-    ifs.read(reinterpret_cast<char*>(seq_parse.data()), size * sizeof(std::tuple<uint64_t, size_t>));
+    ifs.read(reinterpret_cast<char*>(&size), sizeof(uint64_t));
+    seq_parse.reserve(size);
+    std::tuple<uint64_t, uint64_t> elem;
+    uint64_t val;
+
+    for (size_t i = 0; i < 2 * size; i++)
+    {
+        ifs.read(reinterpret_cast<char*>(&val), sizeof(uint64_t));
+        if (i % 2 == 0){
+            std::get<0>(elem) = val;
+        }
+        else{
+            std::get<1>(elem) = val;
+            seq_parse.emplace_back(elem);
+        }
+    }
     ifs.close();
 
     return seq_parse;
@@ -346,7 +366,7 @@ std::vector<std::tuple<uint64_t, size_t>> RLZ::deserialize()
 
 void RLZ::decompress()
 {
-    std::vector<std::tuple<uint64_t, size_t>> seq_parse = deserialize();
+    std::vector<std::tuple<uint64_t, uint64_t>> seq_parse = deserialize();
     sdsl::load_from_file(ref_bit_array, ref_file + ".sdsl");
     
     size_t bit_size = 0;
@@ -446,12 +466,12 @@ void RLZ::bits_to_str(sdsl::bit_vector bit_array, std::string ext)
 * The sequence parse contains tuples (binary ref pos, size) that can reconstruct the sequence file given the reference.
 * We write the non-binary serialization to a file. Testing purposes only.
 * 
-* @param[in] seq_parse [std::vector<std::tuple<uint64_t, size_t>>] The parse of the seq <(binary ref pos,len),(binary ref pos,len),(binary ref pos,len)... >
+* @param[in] seq_parse [std::vector<std::tuple<uint64_t, uint64_t>>] The parse of the seq <(binary ref pos,len),(binary ref pos,len),(binary ref pos,len)... >
 *
 * @return void
 */
 
-void RLZ::print_serialize(const std::vector<std::tuple<uint64_t, size_t>>& seq_parse)
+void RLZ::print_serialize(const std::vector<std::tuple<uint64_t, uint64_t>>& seq_parse)
 {
     std::ofstream ofs(seq_file + ".readable.rlz");
     if (!ofs) {
