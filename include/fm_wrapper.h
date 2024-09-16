@@ -7,16 +7,15 @@
 #include <fstream>
 #include <vector>
 #include <tuple>
+#include <map>
 
 class FM_Wrapper 
 {
     public:
-        size_t rank0;
-        size_t rank1;
-
         FM_Wrapper();
         ~FM_Wrapper();
-        std::tuple<size_t, size_t> backward_match(const sdsl::csa_wt<sdsl::wt_huff<sdsl::rrr_vector<127>>, 512, 1024>& fm_index, 
+        std::tuple<size_t, size_t> backward_match(const sdsl::csa_wt<sdsl::wt_huff<sdsl::rrr_vector<127>>, 512, 1024>& fm_index,
+                                                const std::map<char, uint64_t>& occs, 
                                                 const std::tuple<size_t, size_t>& prev_backward_range,
                                                 const char next_char);
         
