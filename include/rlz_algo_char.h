@@ -36,7 +36,6 @@ class RLZ_CHAR {
         void serialize(const std::vector<std::tuple<uint64_t, uint64_t>>& seq_parse);
         std::vector<std::tuple<uint64_t, uint64_t>> deserialize();
 
-        void bits_to_str(sdsl::bit_vector bit_array, std::string prefix);
         void print_serialize(const std::vector<std::tuple<uint64_t, uint64_t>>& seq_parse);
         void clean();
 };

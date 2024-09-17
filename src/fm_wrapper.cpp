@@ -34,6 +34,7 @@ FM_Wrapper::~FM_Wrapper(){}
 * Can continue from previous character match so do not have to keep redoing previously done backwards matches.
 *
 * @param[in] fm_index [sdsl::csa_wt<sdsl::wt_huff<sdsl::rrr_vector<127>>, 512, 1024>] the fm_index queried
+* @param[in] occs [std::map<char, uint64_t>] essentially the compressed version of F column of the BWT.
 * @param[in] prev_backward_range [sdsl::range] the previous backwards search range.
 * @param[in] next_char [char] the next character to match 
 * 

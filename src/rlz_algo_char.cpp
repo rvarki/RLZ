@@ -90,19 +90,18 @@ void RLZ_CHAR::load_file_to_string(const std::string& input_file, std::string& c
 /**
 * @brief Parses the sequence file in relation to the reference file
 *
-* This function does the RLZ_CHAR parsing of the sequence file. It currently works at the
-* "psuedo" bit level. To clarify, it currently processes the string representation of the bits of the 
-* sequence file. Working at bit level allows us to compress all types of files.
+* This function does the RLZ_CHAR parsing of the sequence file. It parses relative to the original file content of the reference.
+* Fails if there is a character in the sequence that is not present in the reference.
 *
-* RLZ_CHAR algorithm tries to greedily find the longest substring match within the reference starting from the
-* first character in the sequence character such that the RLZ_CHAR parse in the end contains (pos, len) pairs
-* in relation to the reference such that the sequence can be reconstructed from only the RLZ_CHAR parse and the reference
-* file. It is a O(n) algorithm. The size is the reference file + the RLZ_CHAR parse.
+* RLZ algorithm tries to greedily find the longest substring match within the reference starting from the
+* first character in the sequence character such that the RLZ parse in the end contains (pos, len) pairs
+* in relation to the reference such that the sequence can be reconstructed from only the RLZ parse and the reference
+* file. It is a O(n) algorithm. The size is the reference file + the RLZ parse.
 *
 * The algorithm implemented here is as follows.
-* 1. Starting from the last bit of the sequence file or sequence file chunk, check if bit matches the reference
+* 1. Starting from the last char of the sequence file or sequence file chunk, check if char matches the reference
 * (via backwards match with FM-index) 
-* 2a. If match, check if next bit also matches (ex. 001. I know that 1 matches then check if 01 matches etc...)
+* 2a. If match, check if next char also matches (ex. aab. I know that b matches then check if ab matches etc...)
 * 2b. If match and end of sequence file or sequence file chunk, push current (pos,len) pair to parse stack
 * 2c. If mismatch, push (prev pos, len - 1) to parse stack. Reset search from bit that caused mismatch.
 *
@@ -111,7 +110,7 @@ void RLZ_CHAR::load_file_to_string(const std::string& input_file, std::string& c
 * @param [in] fm_index [sdsl::csa_wt<sdsl::wt_huff<sdsl::rrr_vector<127>>, 512, 1024>] the fm-index of the reference
 * @param [in] fm_support [FM_Wrapper] Utility object that allows us to do search and locate queries with fm-index.
 * @param [in] seq_parse_stack_vec [std::vector<std::stack<std::tuple<uint64_t, uint64_t>>>] empty RLZ_CHAR parse stacks equal to number of threads
-* @param [in] num_bits_to_process [size_t] the number of bits that should be processed. Useful for the OpenMP parallelization.
+* @param [in] num_char_to_process [size_t] the number of chars that should be processed. Useful for the OpenMP parallelization.
 * @param [in] loop_iter [size_t] the loop iteration. Useful for OpenMP and making sure we are thread-safe.
 * @param [in] num_threads [size_t] the total number of threads allocated.
 *
@@ -210,12 +209,12 @@ void RLZ_CHAR::calculate_occs(std::string content, std::map<char, uint64_t>& occ
 /**
 * @brief Compresses the sequence file in relation to the reference file.
 *
-* Creates a FM-index from the reference bit array which we query using the sequence bit array.
-* We first convert the reference bit array into its string representation so that we can create the FM-index.
-* We query the index one bit at time from the sequence bit array. When the sequence bit does not have a match, 
+* Creates a FM-index from the reference string which we query using the sequence string.
+* We first create the FM-index from the string representation of the reference.
+* We query the index one char at time from the sequence string. When the sequence char does not have a match, 
 * we add the last matching ref position of the sequence and the length of the match to the parse. Then we 
-* restart the match at the last mismatch position. The parse is stored on a stack due to processing the bits 
-* in reverese (backwards match with FM-index). Popping from stack gives correct order. The parse is ultimately
+* restart the match at the last mismatch position. The parse is stored on a stack due to processing the chars 
+* in reverse (backwards match with FM-index). Popping from stack gives correct order. The parse is ultimately
 * stored in a vector in the correct order. The parse at the end is serialized to a file.
 *
 * @param [in] threads [int] The number of threads provided by the user.
@@ -225,6 +224,8 @@ void RLZ_CHAR::calculate_occs(std::string content, std::map<char, uint64_t>& occ
 * @warning Providing multiple threads changes the output of the RLZ_CHAR parse slightly. 
 * Might create two phrases at chunk boundaries if phrase spans chunk boundary. For proper RLZ_CHAR parse should run with 1 thread.
 * 
+* @warning Will fail if the sequence file contains a char not present in the reference file
+*
 * @note Supposedly cannot create a FM-index directly from bit array.
 * Have to first convert into the reference bits into their string representation and then create the FM-index.
 * Likely a bottleneck in the code as have to store a bit as a byte. [check if there is a way to build bit level FM-index]
@@ -283,13 +284,13 @@ void RLZ_CHAR::compress(int threads)
 /**
 * @brief Serializes the parse of the sequence file
 *
-* The sequence parse contains tuples (binary ref pos, size) that can reconstruct the sequence file given the reference.
+* The sequence parse contains tuples (ref pos, size) that can reconstruct the sequence file given the reference.
 * We serialize the parse vector into binary file called seq_file_name.rlz
 *
 * File content of the .rlz file
-* (uint64_t byte size num of pair) (uint64_t byte size pos) (uint64_t byte size len) (uint64_t byte size pos) (uint64_t byte size len) ...
+* (uint64_t byte: size num of pair) (uint64_t byte: size pos) (uint64_t byte: size len) (uint64_t byte: size pos) (uint64_t byte: size len) ...
 *  
-* @param[in] seq_parse [std::vector<std::tuple<uint64_t, uint64_t>>] The parse of the seq <(binary ref pos,len),(binary ref pos,len),(binary ref pos,len)... >
+* @param[in] seq_parse [std::vector<std::tuple<uint64_t, uint64_t>>] The parse of the seq <(ref pos,len),(ref pos,len),(ref pos,len)... >
 *
 * @return void
 */
@@ -315,7 +316,7 @@ void RLZ_CHAR::serialize(const std::vector<std::tuple<uint64_t, uint64_t>>& seq_
 /**
 * @brief Deserializes the parse of the sequence file
 *
-* Decompress seq_file_name.rlz into tuple vector <(binary ref pos,len),(binary ref pos,len),(binary ref pos,len)... > . 
+* Decompress seq_file_name.rlz into tuple vector <(ref pos,len),(ref pos,len),(ref pos,len)... > . 
 * Return the vector.
 *
 * @return Return the vector.
@@ -355,9 +356,8 @@ std::vector<std::tuple<uint64_t, uint64_t>> RLZ_CHAR::deserialize()
 /**
 * @brief Decompresses the sequence parse back to the original sequence file
 *
-* The sequence parse contains tuples (binary ref pos, size) that can reconstruct the sequence file given the reference.
-* We read the ref position and length from each tuple in the sequence parse and get the corresponding bits from the reference bit array
-* We then convert the bits into bytes and write the ASCII equivalent to file which sbould be the original sequence file.
+* The sequence parse contains tuples (ref pos, size) that can reconstruct the sequence file given the reference.
+* We read the ref position and length from each tuple in the sequence parse and get the corresponding chars from the reference to reconstruct the sequence
 *
 * @warning might have to change int to long long int depending on size
 */
@@ -401,42 +401,6 @@ void RLZ_CHAR::decompress()
     output_file.close();
 }
 
-
-/**
-* @brief Converts the bits to its corresponding character representation
-*
-* Prints out debug info about how many 0 and 1s are in the bit array.
-* Writes the string representation of the bits to a file.
-* Testing purposes only.
-* 
-* @param [in] bit_array [sdsl::bit_vector] the bit array of interest
-* @param [in] ext [std::string] the extension of the file
-*
-*
-*/
-
-void RLZ_CHAR::bits_to_str(sdsl::bit_vector bit_array, std::string ext)
-{
-    std::string bitstr;
-    for (size_t i = 0; i < bit_array.size(); ++i) {
-        bitstr += (bit_array[i] ? '1' : '0');
-    }
-
-    sdsl::rank_support_v<1> b_rank1(&bit_array);
-    sdsl::rank_support_v<0> b_rank0(&bit_array);
-    spdlog::debug("^^^^^^^^^^^^^^^^^^^^^^^^^");
-    spdlog::debug("Number of 1s: {}", b_rank1(bit_array.size()));
-    spdlog::debug("Number of 0s: {}", b_rank0(bit_array.size()));
-    spdlog::debug("^^^^^^^^^^^^^^^^^^^^^^^^^");
-
-    std::ofstream ofs(seq_file + ext);
-    if (!ofs) {
-        spdlog::error("Error opening {}", seq_file + ext);
-        std::exit(EXIT_FAILURE);
-    }
-    ofs << bitstr;
-    ofs.close();
-}
 
 /**
 * @brief Write the non-binary serialization of the sequence parse to a file.
