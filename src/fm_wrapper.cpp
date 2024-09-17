@@ -4,6 +4,8 @@
 #include <sdsl/int_vector.hpp>
 #include <tuple>
 #include <vector>
+#include <map>
+#include <stdexcept>
 
 
 /**
@@ -32,13 +34,15 @@ FM_Wrapper::~FM_Wrapper(){}
 * Can continue from previous character match so do not have to keep redoing previously done backwards matches.
 *
 * @param[in] fm_index [sdsl::csa_wt<sdsl::wt_huff<sdsl::rrr_vector<127>>, 512, 1024>] the fm_index queried
+* @param[in] occs [std::map<char, uint64_t>] essentially the compressed version of F column of the BWT.
 * @param[in] prev_backward_range [sdsl::range] the previous backwards search range.
 * @param[in] next_char [char] the next character to match 
 * 
 * @return the backwards search range of next_char 
 */
 
-std::tuple<size_t, size_t> FM_Wrapper::backward_match(const sdsl::csa_wt<sdsl::wt_huff<sdsl::rrr_vector<127>>, 512, 1024>& fm_index, 
+std::tuple<size_t, size_t> FM_Wrapper::backward_match(const sdsl::csa_wt<sdsl::wt_huff<sdsl::rrr_vector<127>>, 512, 1024>& fm_index,
+                                                    const std::map<char, uint64_t>& occs,
                                                     const std::tuple<size_t, size_t>& prev_backward_range,
                                                     const char next_char)
 {
@@ -47,16 +51,19 @@ std::tuple<size_t, size_t> FM_Wrapper::backward_match(const sdsl::csa_wt<sdsl::w
     std::size_t next_right = fm_index.bwt.rank(std::get<1>(prev_backward_range), next_char);
 
     // There is a special (smaller) character appended so have to add 1 to the offset for both
-    // For bit 1 have to offset the range by the number of 0 bits. 
-    if (next_char == '0'){
-        next_left += 1;
-        next_right += 1;
+    try{ 
+        next_left += occs.at(next_char) + 1;
+    } catch (const std::out_of_range& e) {
+        std::cerr << "Character not found in reference text: '" << next_char << "'" << std::endl;
+        exit(1);
     }
-    if (next_char == '1'){
-        next_left += this->rank0 + 1;
-        next_right += this->rank0 + 1;
+    try{ 
+        next_right += occs.at(next_char) + 1;
+    } catch (const std::out_of_range& e) {
+        std::cerr << "Character not found in reference text: '" << next_char << "'" << std::endl;
+        exit(1);
     }
-
+    
     return std::make_tuple(next_left,next_right);
 }
 
