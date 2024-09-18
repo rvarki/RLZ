@@ -62,9 +62,9 @@ message(STATUS "The source directory of the project is ${CMAKE_SOURCE_DIR}")
 
 # include_directories has been legacy since 2012 
 # https://stackoverflow.com/questions/13703647/how-to-properly-add-include-directories-with-cmake
-set(PROJECT_SRC_DIR ${CMAKE_SOURCE_DIR}/src)
-set(PROJECT_INCLUDE_DIR ${CMAKE_SOURCE_DIR}/include)
-set(THIRDPARTY_INCLUDE_DIR ${CMAKE_SOURCE_DIR}/thirdparty)
+set(PROJECT_SRC_DIR ${CMAKE_CURRENT_SOURCE_DIR}/src)
+set(PROJECT_INCLUDE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/include)
+set(THIRDPARTY_INCLUDE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/thirdparty)
 
 message(STATUS "The include directories of the project is ${INCLUDE_DIRECTORIES}")
 
@@ -155,5 +155,6 @@ add_executable(rlz rlz.cpp)
 target_include_directories(rlz PUBLIC ${SDSL_SRC} ${THIRDPARTY_INCLUDE_DIR} ${THIRDPARTY_INCLUDE_DIR}/CLI)
 target_link_libraries(rlz PUBLIC ${SDSL_LIB} fm_wrapper rlz_algo rlz_algo_char)
 
+install(TARGETS fm_wrapper rlz_algo rlz_algo_char TYPE LIBRARY)
 install(TARGETS rlz TYPE RUNTIME)
 
