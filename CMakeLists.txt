@@ -33,13 +33,13 @@ endif()
 # Version number of project
 execute_process(
         COMMAND git rev-parse --abbrev-ref HEAD
-        WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
+        WORKING_DIRECTORY "${CMAKE_CURRENT_LIST_DIR}"
         OUTPUT_VARIABLE GIT_BRANCH
         OUTPUT_STRIP_TRAILING_WHITESPACE)
 
 execute_process(
         COMMAND git log -1 --format=%h
-        WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
+        WORKING_DIRECTORY "${CMAKE_CURRENT_LIST_DIR}"
         OUTPUT_VARIABLE GIT_COMMIT_HASH
         OUTPUT_STRIP_TRAILING_WHITESPACE)
 
@@ -58,13 +58,13 @@ endif()
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${BUILD_TYPE_FLAGS}")
 #################################################################################
 # Check dependencies
-message(STATUS "The source directory of the project is ${CMAKE_SOURCE_DIR}")
+message(STATUS "The source directory of the project is ${CMAKE_CURRENT_LIST_DIR}")
 
 # include_directories has been legacy since 2012 
 # https://stackoverflow.com/questions/13703647/how-to-properly-add-include-directories-with-cmake
-set(PROJECT_SRC_DIR ${CMAKE_CURRENT_SOURCE_DIR}/src)
-set(PROJECT_INCLUDE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/include)
-set(THIRDPARTY_INCLUDE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/thirdparty)
+set(PROJECT_SRC_DIR ${CMAKE_CURRENT_LIST_DIR}/src)
+set(PROJECT_INCLUDE_DIR ${CMAKE_CURRENT_LIST_DIR}/include)
+set(THIRDPARTY_INCLUDE_DIR ${CMAKE_CURRENT_LIST_DIR}/thirdparty)
 
 message(STATUS "The include directories of the project is ${INCLUDE_DIRECTORIES}")
 
@@ -130,9 +130,9 @@ if(NOT SDSL_LIB)
 
     set(SDSL_SRC ${CMAKE_CURRENT_BINARY_DIR}/include CACHE PATH "Path to include dir" FORCE)
     set(DIVSUFSORT_SRC ${CMAKE_CURRENT_BINARY_DIR}/include CACHE PATH "Path to include dir" FORCE)
-    set(SDSL_LIB ${CMAKE_CURRENT_BINARY_DIR}/lib/libsdsl.a CACHE FILEPATH "Path to libsdsl.a" FORCE)
-    set(DIVSUFSORT_LIB ${CMAKE_CURRENT_BINARY_DIR}/lib/libdivsufsort.a CACHE FILEPATH "Path to libdivsufsort.a" FORCE)
-    set(DIVSUFSORT64_LIB ${CMAKE_CURRENT_BINARY_DIR}/lib/libdivsufsort64.a CACHE FILEPATH "Path to libdivsufsort64.a" FORCE)
+    set(SDSL_LIB ${CMAKE_CURRENT_BINARY_DIR}/lib/libsdsl.a CACHE PATH "Path to libsdsl.a" FORCE)
+    set(DIVSUFSORT_LIB ${CMAKE_CURRENT_BINARY_DIR}/lib/libdivsufsort.a CACHE PATH "Path to libdivsufsort.a" FORCE)
+    set(DIVSUFSORT64_LIB ${CMAKE_CURRENT_BINARY_DIR}/lib/libdivsufsort64.a CACHE PATH "Path to libdivsufsort64.a" FORCE)
 
 else()
     message(STATUS "sdsl library found at ${SDSL_LIB}.")
