@@ -335,7 +335,7 @@ void RLZ::compress(int threads)
     size_t bits_stored = 0;
     std::vector<std::tuple<uint64_t, uint64_t>> seq_parse;
     // Can process the parse vectors sequentially since the first vector contains the parse of the start of the non-reversed sequence.
-    for (int i = threads - 1; i >= 0; i--)
+    for (int i = 0; i < threads; i++)
     {
         for (int j = 0; j < seq_parse_vec_vec[i].size(); j++)
         {
