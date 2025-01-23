@@ -140,12 +140,12 @@ int main(int argc, char **argv)
             spdlog::debug("Built main parser in {:.3} seconds", sw_parser_elapsed.count());
             spdlog::stopwatch sw_ref;
             spdlog::debug("Starting to store the reference file as a bit vector");
-            main_parser.load_file_to_bit_vector(ref_file, main_parser.ref_bit_array);
+            main_parser.load_reverse_file_to_bit_vector(ref_file, main_parser.ref_bit_array);
             auto sw_ref_elapsed = sw_ref.elapsed();
             spdlog::debug("Loaded file in {:.3} seconds", sw_ref_elapsed.count());
             spdlog::stopwatch sw_seq;
             spdlog::debug("Starting to store the sequence file as a bit vector");
-            main_parser.load_file_to_bit_vector(seq_file, main_parser.seq_bit_array);
+            main_parser.load_reverse_file_to_bit_vector(seq_file, main_parser.seq_bit_array);
             auto sw_seq_elapsed = sw_ref.elapsed();
             spdlog::debug("Loaded file in {:.3} seconds", sw_seq_elapsed.count());
             spdlog::stopwatch sw_compress;
