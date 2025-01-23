@@ -74,12 +74,12 @@ int main(int argc, char **argv)
             spdlog::debug("Built main parser in {:.3} seconds", sw_parser_elapsed.count());
             spdlog::stopwatch sw_ref;
             spdlog::debug("Starting to read the reference file");
-            main_parser.load_file_to_string(ref_file, main_parser.ref_content);
+            main_parser.load_reverse_file_to_string(ref_file, main_parser.ref_content);
             auto sw_ref_elapsed = sw_ref.elapsed();
             spdlog::debug("Finished reading file in {:.3} seconds", sw_ref_elapsed.count());
             spdlog::stopwatch sw_seq;
             spdlog::debug("Starting to read the sequence file");
-            main_parser.load_file_to_string(seq_file, main_parser.seq_content);
+            main_parser.load_reverse_file_to_string(seq_file, main_parser.seq_content);
             auto sw_seq_elapsed = sw_ref.elapsed();
             spdlog::debug("Finished reading file in {:.3} seconds", sw_seq_elapsed.count());
             spdlog::stopwatch sw_compress;
