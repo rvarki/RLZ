@@ -218,9 +218,9 @@ void RLZ_CHAR::parse(const sdsl::csa_wt<sdsl::wt_huff<sdsl::rrr_vector<127>>, 51
             uint64_t adjusted_sa_pos = mirrored_sa_pos - pattern_len; // adjust the position to where pattern starts
             seq_parse_vec_vec[loop_iter].emplace_back(std::make_tuple(adjusted_sa_pos, pattern_len));
             prev_left = 0;
-            prev_right = fm_index.bwt.size()-1;
+            prev_right = fm_index.bwt.size();
             next_left = 0;
-            next_right = fm_index.bwt.size()-1;
+            next_right = fm_index.bwt.size();
             pattern = "";
             ++i;
         }
