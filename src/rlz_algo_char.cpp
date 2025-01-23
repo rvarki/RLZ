@@ -128,7 +128,6 @@ void RLZ_CHAR::load_reverse_file_to_string(const std::string& input_file, std::s
     }
 
     spdlog::info("File read successfully.");
-    spdlog::debug("Content: {}", content);
 
     file.close();
     auto sw_convert_elapsed = sw_convert.elapsed();
@@ -154,17 +153,16 @@ void RLZ_CHAR::load_reverse_file_to_string(const std::string& input_file, std::s
 * file. It is a O(n) algorithm. The size is the reference file + the RLZ parse.
 *
 * The algorithm implemented here is as follows.
-* 1. Starting from the last char of the sequence file or sequence file chunk, check if char matches the reference
+* 1. Starting from the last char of the reversed sequence file or sequence file chunk, check if char matches the reversed reference
 * (via backwards match with FM-index) 
 * 2a. If match, check if next char also matches (ex. aab. I know that b matches then check if ab matches etc...)
-* 2b. If match and end of sequence file or sequence file chunk, push current (pos,len) pair to parse stack
-* 2c. If mismatch, push (prev pos, len - 1) to parse stack. Reset search from bit that caused mismatch.
+* 2b. If match and end of sequence file or sequence file chunk, push current (pos,len) pair to parse vector
+* 2c. If mismatch, push (prev pos, len - 1) to parse stack. Reset search from char that caused mismatch.
 *
-* Push to parse stack since we process the string in reverse. Popping from stack gives correct order.
 *
 * @param [in] fm_index [sdsl::csa_wt<sdsl::wt_huff<sdsl::rrr_vector<127>>, 512, 1024>] the fm-index of the reference
 * @param [in] fm_support [FM_Wrapper] Utility object that allows us to do search and locate queries with fm-index.
-* @param [in] seq_parse_stack_vec [std::vector<std::stack<std::tuple<uint64_t, uint64_t>>>] empty RLZ_CHAR parse stacks equal to number of threads
+* @param [in] seq_parse_vec_vec [std::vector<std::vector<std::tuple<uint64_t, uint64_t>>>] empty RLZ_CHAR parse vectors equal to number of threads
 * @param [in] num_char_to_process [size_t] the number of chars that should be processed. Useful for the OpenMP parallelization.
 * @param [in] loop_iter [size_t] the loop iteration. Useful for OpenMP and making sure we are thread-safe.
 * @param [in] num_threads [size_t] the total number of threads allocated.
@@ -272,12 +270,11 @@ void RLZ_CHAR::calculate_occs(std::string content, std::map<char, uint64_t>& occ
 /**
 * @brief Compresses the sequence file in relation to the reference file.
 *
-* Creates a FM-index from the reference string which we query using the sequence string.
-* We first create the FM-index from the string representation of the reference.
-* We query the index one char at time from the sequence string. When the sequence char does not have a match, 
+* Creates a FM-index from the reversed reference string which we query using the reversed sequence string in order to simulate forward matching.
+* We first create the FM-index from the reveresed string representation of the reference.
+* We query the index one char at time from the reversed sequence string. When the sequence char does not have a match, 
 * we add the last matching ref position of the sequence and the length of the match to the parse. Then we 
-* restart the match at the last mismatch position. The parse is stored on a stack due to processing the chars 
-* in reverse (backwards match with FM-index). Popping from stack gives correct order. The parse is ultimately
+* restart the match at the last mismatch position. The parse is ultimately
 * stored in a vector in the correct order. The parse at the end is serialized to a file.
 *
 * @param [in] threads [int] The number of threads provided by the user.
@@ -289,11 +286,6 @@ void RLZ_CHAR::calculate_occs(std::string content, std::map<char, uint64_t>& occ
 * 
 * @warning Will fail if the sequence file contains a char not present in the reference file
 *
-* @note Supposedly cannot create a FM-index directly from bit array.
-* Have to first convert into the reference bits into their string representation and then create the FM-index.
-* Likely a bottleneck in the code as have to store a bit as a byte. [check if there is a way to build bit level FM-index]
-*
-* @note Might be more efficient to serialize the stack then create the vector [implementation detail]
 */
 
 void RLZ_CHAR::compress(int threads)
@@ -321,10 +313,10 @@ void RLZ_CHAR::compress(int threads)
         parse(fm_index, fm_support, occs, seq_content, seq_parse_vec_vec, num_char_to_process, i, threads);
     }
 
-    // Pop from stack and store in seq_parse vector
+    // Store tuples of (pos,len) in correct order in vector
     size_t chars_stored = 0;
     std::vector<std::tuple<uint64_t, uint64_t>> seq_parse;
-    // Can process the parse stacks sequentially since the first stack contains the parse of the start of the non-reversed sequence.
+    // Can process the parse vectors sequentially since the first vector contains the parse of the start of the non-reversed sequence.
     for (int i = threads - 1; i >= 0; i--)
     {
         for (int j = 0; j < seq_parse_vec_vec[i].size(); j++)
@@ -341,7 +333,7 @@ void RLZ_CHAR::compress(int threads)
     serialize(seq_parse);
 
     // Comment (Testing only)
-    print_serialize(seq_parse);
+    // print_serialize(seq_parse);
 }
 
 /**
