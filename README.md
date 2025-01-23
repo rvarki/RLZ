@@ -4,22 +4,32 @@
 
 This software computes the Relative Lempel Ziv (RLZ) parse of the target sequence file using a reference file. By default, the software should work for any type of file whether that be FASTA files, English files, etc... It does this by doing the encoding at the bit-level. Doing the encoding this way prevents the issue that occurs when the sequence contains a character that is not present in the reference. However, we also have provided an option to do the encoding at the character level, however the encoding could potentially fail due to the aforementioned issue. The decompression expects that the files were originally ASCII (8 bit) encoded.
 
+The software performs pattern matching with the FM-index by reversing both the sequence and the reference text internally. This approach enables forward matching and determines the length of the forward match. The correct reference position is obtained by applying an involution to the suffix array position retrieved from the FM-index (which is built on the reversed reference text), a constant-time operation. 
+
 ## Algorithm Workflow
 
-To compress the target sequence file in relation to a reference file, the software performs the following steps:
+To compress the target sequence file relative to a reference file, the software follows these steps:
 
-If default (bit-level) encoding performed:
+Default (bit-level) encoding:
 
-0. Converts both the reference and sequence file into its binary representation.
+0. Convert both the reference and sequence files to their binary representation.
 
-For both types of encoding:
+Common steps (for all encoding types):
 
-1. Build an FM-index using the reference (bit or char representation).
-2. In reverse, attempt to match the bit or char of the sequence against the reference sequence using the backwards match capabilities of the FM-index. 
-    - 2a. If match, check if next bit or char also matches.
-    - 2b. If match and at end of sequence file, record (pos,len)pair
-    - 2c. If mismatch, record (prev pos, len - 1) pair. Reset search from bit or char that caused mismatch.
-3. All the (pos, len) pairs are then written to a file in order. This is the RLZ parse.
+1. Reverse the reference and sequence files.
+
+2. Build an FM-index from the reversed reference (in bit or character form).
+
+3. Perform reverse matching:
+    Match each bit or character of the reversed sequence against the reversed reference using the FM-index's backward matching capabilities (to simulate forward matching).
+   
+    3a. If a match is found, check if the next bit or character also matches.
+   
+    3b. If a match is found and it's the end of the sequence, apply involution to the suffix array (SA) position and record the (pos, len) pair.
+   
+    3c. If a mismatch occurs, apply involution to the SA position, record the (prev pos, len - 1) pair, and restart the search from the mismatched bit or character.
+   
+4. Write all (pos, len) pairs sequentially to a file. This constitutes the RLZ parse.
 
 > [!NOTE]
 > The RLZ parse is in reference to the reference file.
