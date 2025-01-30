@@ -69,7 +69,7 @@ void RLZ_CHAR::load_file_to_string(const std::string& input_file, std::string& c
 
     // Load the file as string
     if (file.read(&content[0], file_size)) {
-        spdlog::info("File read successfully.");
+        spdlog::debug("File read successfully.");
     } else {
         spdlog::error("Error reading file: {}", input_file);
         std::exit(EXIT_FAILURE);
@@ -127,7 +127,7 @@ void RLZ_CHAR::load_reverse_file_to_string(const std::string& input_file, std::s
         content[file_size - 1 - i] = byte; // Place it at the reverse position
     }
 
-    spdlog::info("File read successfully.");
+    spdlog::debug("File read successfully.");
 
     file.close();
     auto sw_convert_elapsed = sw_convert.elapsed();

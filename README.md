@@ -2,7 +2,10 @@
 
 ## Description
 
-This software computes the Relative Lempel Ziv (RLZ) parse of the target sequence file using a reference file. By default, the software should work for any type of file whether that be FASTA files, English files, etc... It does this by doing the encoding at the bit-level. Doing the encoding this way prevents the issue that occurs when the sequence contains a character that is not present in the reference. However, we also have provided an option to do the encoding at the character level, however the encoding could potentially fail due to the aforementioned issue. The decompression expects that the files were originally ASCII (8 bit) encoded.
+This software computes the Relative Lempel Ziv (RLZ) parse of the target sequence file using a reference file. By default, the software does character-level encoding.
+However, character-level encoding can fail if the reference file does not contain all the unique characters in the sequence file. We have also provided an option to 
+do the encoding at the bit-level. Doing the encoding this way prevents the issue that occurs when the sequence contains a character that is not present in the reference.
+However, the parse might be larger than the character-level parse due to encoding the bit representation of the sequence file. The decompression expects that the files were originally ASCII (8 bit) encoded.
 
 The software performs pattern matching with the FM-index by reversing both the sequence and the reference text internally. This approach enables forward matching and determines the length of the forward match. The correct reference position is obtained by applying an involution to the suffix array position retrieved from the FM-index (which is built on the reversed reference text), a constant-time operation. 
 
@@ -10,7 +13,7 @@ The software performs pattern matching with the FM-index by reversing both the s
 
 To compress the target sequence file relative to a reference file, the software follows these steps:
 
-Default (bit-level) encoding:
+Bit-level encoding:
 
 0. Convert both the reference and sequence files to their binary representation.
 
@@ -21,13 +24,13 @@ Common steps (for all encoding types):
 2. Build an FM-index from the reversed reference (in bit or character form).
 
 3. Perform reverse matching:
-    Match each bit or character of the reversed sequence against the reversed reference using the FM-index's backward matching capabilities (to simulate forward matching).
+    Match each character or bit of the reversed sequence against the reversed reference using the FM-index's backward matching capabilities (to simulate forward matching).
    
-    3a. If a match is found, check if the next bit or character also matches.
+    3a. If a match is found, check if the next character or bit also matches.
    
-    3b. If a match is found and it's the end of the sequence, apply involution to the suffix array (SA) position and record the (pos, len) pair.
+    3b. If a match is found and it's the end of the sequence, apply involution to the suffix array (SA) position, subtract the length of the match from the position, and record the (pos, len) pair.
    
-    3c. If a mismatch occurs, apply involution to the SA position, record the (prev pos, len - 1) pair, and restart the search from the mismatched bit or character.
+    3c. If a mismatch occurs, apply involution to the SA position, subtract the length of the match from the position, record the (prev pos, len - 1) pair, and restart the search from the mismatched character or bit.
    
 4. Write all (pos, len) pairs sequentially to a file. This constitutes the RLZ parse.
 
@@ -63,15 +66,14 @@ After building the project, an executable named rlz will be created in the build
 
 ### Default Compression Example
 
-In this section, we will go through a small example using the default bit-level compression. In the data/english directory, we have provided an example reference and target sequence file that were derived from the English text in the [Pizza&Chili Corpus](https://pizzachili.dcc.uchile.cl/texts/nlang/).
+In this section, we will go through a small example using the default character-level compression. In the data/dna directory, we have provided an example reference and target sequence file that were derived from DNA FASTA files.
 
-1. To compress the sequence file, run the following command from the build directory
+1. To compress the sequence file with character compression, run the following command from the build directory
 
 ```
-./rlz -r ../data/english/english_ref.txt -s ../data/english/english_seq.txt
+./rlz -r ../data/dna/dna_ref.txt -s ../data/dna/dna_seq.txt
 ```
-
-This command will produce the following file in the data/english directory: `english_seq.txt.rlz`. The .rlz file contains the RLZ parse.
+This command will produce the following file in the data/dna directory: `dna_seq.txt.rlz`. The .rlz file contains the RLZ parse.
 
 > [!NOTE]
 > Multithreading is supported in the compression step with the -t [num. of threads] option which can significantly make the compression step faster. However, the RLZ parse is slightly different from what you would get if you run with a single thread. The reason is we cannot identify phrases that span where the file was split. Potentially might add an additional thread number of parse entries that would not exist if you ran with a single thread.
@@ -82,38 +84,40 @@ This command will produce the following file in the data/english directory: `eng
 2. To decompress the file, run the following command
 
 ```
-./rlz -r ../data/english/english_ref.txt -s ../data/english/english_seq.txt -d
-```
-This command should produce a file called `english_seq.txt.out` in the data/english directory. This is the decompressed sequence file.
-
-3. Check to see if the file decompressed correctly
-```
-diff ../data/english/english_seq.txt ../data/english/english_seq.txt.out
-```
-
-There should be no output from this command if compressed and decompressed correctly. 
-
-### Character Compression Example
-
-In this section, we will go through a small example using the character-level compression option. In the data/dna directory, we have provided an example reference and target sequence file that were derived from DNA FASTA files.
-
-1. To compress the sequence file with character compression, run the following command from the build directory
-
-```
-./rlz -r ../data/dna/dna_ref.txt -s ../data/dna/dna_seq.txt --alphabet
-```
-This command will produce the following file in the data/dna directory: `dna_seq.txt.rlz`. The .rlz file contains the RLZ parse.
-
-2. To decompress the file, run the following command
-
-```
-./rlz -r ../data/dna/dna_ref.txt -s ../data/dna/dna_seq.txt -d --alphabet
+./rlz -r ../data/dna/dna_ref.txt -s ../data/dna/dna_seq.txt -d
 ```
 This command should produce a file called `dna_seq.txt.out` in the data/dna directory. This is the decompressed sequence file.
 
 3. Check to see if the file decompressed correctly
 ```
 diff ../data/dna/dna_seq.txt ../data/dna/dna_seq.txt.out
+```
+
+There should be no output from this command if compressed and decompressed correctly. 
+
+
+### Bit Compression Example
+
+In this section, we will go through a small example using the bit-level compression option. In the data/english directory, we have provided an example reference and target sequence file that were derived from the English text in the [Pizza&Chili Corpus](https://pizzachili.dcc.uchile.cl/texts/nlang/).
+
+1. To compress the sequence file, run the following command from the build directory
+
+```
+./rlz -r ../data/english/english_ref.txt -s ../data/english/english_seq.txt --bit
+```
+
+This command will produce the following file in the data/english directory: `english_seq.txt.rlz`. The .rlz file contains the RLZ parse.
+
+2. To decompress the file, run the following command
+
+```
+./rlz -r ../data/english/english_ref.txt -s ../data/english/english_seq.txt --bit -d
+```
+This command should produce a file called `english_seq.txt.out` in the data/english directory. This is the decompressed sequence file.
+
+3. Check to see if the file decompressed correctly
+```
+diff ../data/english/english_seq.txt ../data/english/english_seq.txt.out
 ```
 
 There should be no output from this command if compressed and decompressed correctly. 
