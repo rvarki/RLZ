@@ -15,11 +15,11 @@
 #include "spdlog/stopwatch.h"
 
 /**
-* @brief Default Constructor of the RLZ_CHAR class
-* @param[in] seq_file [string] Path to sequence file
+* @brief Constructor of RLZ_CHAR class
+* @param[in] ref_file [string] Path to reference file
 */
 
-RLZ_CHAR::RLZ_CHAR(const std::string seq_file): seq_file(seq_file){}
+RLZ_CHAR::RLZ_CHAR(const std::string ref_file): ref_file(ref_file){}
 
 /**
 * @brief Constuctor of RLZ_CHAR class.
@@ -270,7 +270,7 @@ void RLZ_CHAR::parse(const sdsl::csa_wt<sdsl::wt_huff<sdsl::rrr_vector<127>>, 51
 * @param [in] fm_support [FM_Wrapper] Utility object that allows us to do search and locate queries with fm-index.
 * @param [in] occs [std::map<char, uint64_t>] the number of occurences of each char in the ref file
 * @param [in] seq_file [std::string] the sequence file.
-* @param [in] seq_parse_vec [std::vector<std::tuple<uint64_t, uint64_t>>] empty RLZ_CHAR parse vectors equal to number of threads
+* @param [in] seq_parse_vec [std::vector<std::tuple<uint64_t, uint64_t>>] empty RLZ_CHAR parse vector
 *
 * @return void
 */
@@ -437,7 +437,7 @@ void RLZ_CHAR::compress(int threads)
     spdlog::debug("The sequence was encoded in {} chars", seq_content.size());
     spdlog::debug("The rlz parse encodes for {} chars", chars_stored);
 
-    serialize(seq_parse);
+    serialize(seq_parse, seq_file);
 
     // Comment (Testing only)
     // print_serialize(seq_parse);
@@ -464,7 +464,7 @@ void RLZ_CHAR::compress(int threads)
 *
 */
 
-void RLZ_CHAR::stream_compress(std::string seq_file)
+void RLZ_CHAR::stream_compress(const std::string& seq_file)
 {
     sdsl::csa_wt<sdsl::wt_huff<sdsl::rrr_vector<127>>, 512, 1024> fm_index;
     
@@ -492,6 +492,7 @@ void RLZ_CHAR::stream_compress(std::string seq_file)
         // spdlog::debug("Ref Pos: {}, Len: {}", std::get<0>(seq_parse.back()), std::get<1>(seq_parse.back()));
     }
     
+    // Get file size of sequence file
     std::ifstream sfile(seq_file, std::ios::ate);
     if (!sfile) {
         spdlog::error("Error opening {}", seq_file);
@@ -499,15 +500,16 @@ void RLZ_CHAR::stream_compress(std::string seq_file)
     }
 
     // Get the file size in bytes
-    std::streamsize sfile_size = sfile.tellg();    
+    std::streamsize sfile_size = sfile.tellg();
+    sfile.close();    
 
     spdlog::debug("The sequence was encoded in {} chars", sfile_size);
     spdlog::debug("The rlz parse encodes for {} chars", chars_stored);
 
-    serialize(seq_parse);
+    serialize(seq_parse, seq_file);
 
     // Comment (Testing only)
-    print_serialize(seq_parse);
+    // print_serialize(seq_parse);
 }
 
 
@@ -521,11 +523,12 @@ void RLZ_CHAR::stream_compress(std::string seq_file)
 * (uint64_t byte: size num of pair) (uint64_t byte: size pos) (uint64_t byte: size len) (uint64_t byte: size pos) (uint64_t byte: size len) ...
 *  
 * @param[in] seq_parse [std::vector<std::tuple<uint64_t, uint64_t>>] The parse of the seq <(ref pos,len),(ref pos,len),(ref pos,len)... >
+* @param[in] seq_file [std::string] the sequence file name
 *
 * @return void
 */
 
-void RLZ_CHAR::serialize(const std::vector<std::tuple<uint64_t, uint64_t>>& seq_parse)
+void RLZ_CHAR::serialize(const std::vector<std::tuple<uint64_t, uint64_t>>& seq_parse, const std::string& seq_file)
 {
     std::ofstream ofs(seq_file + ".rlz", std::ios::binary);
     if (!ofs) {

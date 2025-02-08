@@ -18,12 +18,12 @@ class RLZ_CHAR {
         std::string seq_content;
 
         // Single thread
-        RLZ_CHAR(const std::string seq_file);
+        RLZ_CHAR(const std::string ref_file);
         // Mult-thread
         RLZ_CHAR(const std::string ref_file, const std::string seq_file);
         ~RLZ_CHAR();
 
-        void stream_compress(const std::string seq_file);
+        void stream_compress(const std::string& seq_file);
         void compress(int threads);
 
         void stream_parse(const sdsl::csa_wt<sdsl::wt_huff<sdsl::rrr_vector<127>>, 512, 1024>& fm_index,
@@ -45,7 +45,7 @@ class RLZ_CHAR {
         void load_file_to_string(const std::string& input_file, std::string& content);
         void load_reverse_file_to_string(const std::string& input_file, std::string& content);
         void calculate_occs(std::string content, std::map<char, uint64_t>& occs);
-        void serialize(const std::vector<std::tuple<uint64_t, uint64_t>>& seq_parse);
+        void serialize(const std::vector<std::tuple<uint64_t, uint64_t>>& seq_parse, const std::string& seq_file);
         std::vector<std::tuple<uint64_t, uint64_t>> deserialize();
 
         void print_serialize(const std::vector<std::tuple<uint64_t, uint64_t>>& seq_parse);
