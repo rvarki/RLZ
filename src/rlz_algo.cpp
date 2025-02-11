@@ -13,6 +13,11 @@
 #include <map>
 #include "spdlog/spdlog.h"
 #include "spdlog/stopwatch.h"
+#include <chrono>
+
+std::chrono::duration<double> backward_match_time{0.0};
+std::chrono::duration<double> sa_time{0.0};
+std::chrono::duration<double> serialize_time{0.0};
 
 /**
 * @brief Constuctor of RLZ class.
@@ -219,16 +224,22 @@ void RLZ::parse(const sdsl::csa_wt<sdsl::wt_huff<sdsl::rrr_vector<127>>, 512, 10
         pattern = next_char + pattern;
 
         std::tuple<size_t,size_t> previous_ranges = std::make_tuple(prev_left, prev_right);
+        auto back_start = std::chrono::high_resolution_clock::now();
         std::tuple<size_t,size_t> next_ranges = fm_support.backward_match(fm_index, occs, previous_ranges, next_char);
+        auto back_end = std::chrono::high_resolution_clock::now();
+        backward_match_time += back_end - back_start;
         next_left = std::get<0>(next_ranges);
         next_right = std::get<1>(next_ranges);
 
         // If same then that means no perfect match so we reset.
         if (next_left == next_right){
             uint64_t pattern_len = pattern.size() - 1; // -1 due to not matching the last character successfully
+            auto sa_start = std::chrono::high_resolution_clock::now();
             uint64_t sa_pos = fm_support.get_suffix_array_value(fm_index, prev_left);
             uint64_t mirrored_sa_pos = fm_index.bwt.size() - 1 - sa_pos; // 0 based involution formula of sa position to correct for the reverse string matching (will give pos in ref where pattern ends)
             uint64_t adjusted_sa_pos = mirrored_sa_pos - pattern_len; // adjust the position to where pattern starts
+            auto sa_end = std::chrono::high_resolution_clock::now();
+            sa_time += sa_end - sa_start;
             seq_parse_vec_vec[loop_iter].emplace_back(std::make_tuple(adjusted_sa_pos, pattern_len));
             prev_left = 0;
             prev_right = fm_index.bwt.size();
@@ -241,9 +252,12 @@ void RLZ::parse(const sdsl::csa_wt<sdsl::wt_huff<sdsl::rrr_vector<127>>, 512, 10
         else if (i == end_loc + 1)
         {
             uint64_t pattern_len = pattern.size();
+            auto sa_start = std::chrono::high_resolution_clock::now();
             uint64_t sa_pos = fm_support.get_suffix_array_value(fm_index, next_left);
             uint64_t mirrored_sa_pos = fm_index.bwt.size() - 1 - sa_pos;
             uint64_t adjusted_sa_pos = mirrored_sa_pos - pattern_len;
+            auto sa_end = std::chrono::high_resolution_clock::now();
+            sa_time += sa_end - sa_start;
             seq_parse_vec_vec[loop_iter].emplace_back(std::make_tuple(adjusted_sa_pos, pattern_len));
         }
         // Currently in a perfect match
@@ -325,16 +339,22 @@ void RLZ::stream_parse(const sdsl::csa_wt<sdsl::wt_huff<sdsl::rrr_vector<127>>, 
             pattern = next_char + pattern;
 
             std::tuple<size_t,size_t> previous_ranges = std::make_tuple(prev_left, prev_right);
+            auto back_start = std::chrono::high_resolution_clock::now();
             std::tuple<size_t,size_t> next_ranges = fm_support.backward_match(fm_index, occs, previous_ranges, next_char);
+            auto back_end = std::chrono::high_resolution_clock::now();
+            backward_match_time += back_end - back_start;
             next_left = std::get<0>(next_ranges);
             next_right = std::get<1>(next_ranges);
 
             // If same then that means no perfect match so we reset.
             if (next_left == next_right){
                 uint64_t pattern_len = pattern.size() - 1; // -1 due to not matching the last character successfully
+                auto sa_start = std::chrono::high_resolution_clock::now();
                 uint64_t sa_pos = fm_support.get_suffix_array_value(fm_index, prev_left);
                 uint64_t mirrored_sa_pos = fm_index.bwt.size() - 1 - sa_pos; // 0 based involution formula of sa position to correct for the reverse string matching (will give pos in ref where pattern ends)
                 uint64_t adjusted_sa_pos = mirrored_sa_pos - pattern_len; // adjust the position to where pattern starts
+                auto sa_end = std::chrono::high_resolution_clock::now();
+                sa_time += sa_end - sa_start;
                 seq_parse_vec.emplace_back(std::make_tuple(adjusted_sa_pos, pattern_len));
                 prev_left = 0;
                 prev_right = fm_index.bwt.size();
@@ -347,9 +367,12 @@ void RLZ::stream_parse(const sdsl::csa_wt<sdsl::wt_huff<sdsl::rrr_vector<127>>, 
             else if (i == 7 && sfile.peek() == EOF)
             {
                 uint64_t pattern_len = pattern.size();
+                auto sa_start = std::chrono::high_resolution_clock::now();
                 uint64_t sa_pos = fm_support.get_suffix_array_value(fm_index, next_left);
                 uint64_t mirrored_sa_pos = fm_index.bwt.size() - 1 - sa_pos;
                 uint64_t adjusted_sa_pos = mirrored_sa_pos - pattern_len;
+                auto sa_end = std::chrono::high_resolution_clock::now();
+                sa_time += sa_end - sa_start;
                 seq_parse_vec.emplace_back(std::make_tuple(adjusted_sa_pos, pattern_len));
             }
             // Currently in a perfect match
@@ -446,6 +469,9 @@ void RLZ::compress(int threads)
         parse(fm_index, fm_support, occs, seq_bit_array, seq_parse_vec_vec, num_bits_to_process, i, threads);
     }
 
+    spdlog::debug("Total FM-index time (s): {:.6f}", std::chrono::duration<double>(backward_match_time).count());
+    spdlog::debug("Total SA time (s): {:.6f}", std::chrono::duration<double>(sa_time).count());
+
     // Store tuples of (pos,len) in correct order in vector
     size_t bits_stored = 0;
     std::vector<std::tuple<uint64_t, uint64_t>> seq_parse;
@@ -463,7 +489,11 @@ void RLZ::compress(int threads)
     spdlog::debug("The sequence was encoded in {} bits", seq_bit_array.size());
     spdlog::debug("The rlz parse encodes for {} bits", bits_stored);
 
+    auto serialize_start = std::chrono::high_resolution_clock::now();
     serialize(seq_parse, seq_file);
+    auto serialize_end = std::chrono::high_resolution_clock::now();
+    serialize_time += serialize_end - serialize_start;
+    spdlog::debug("Total serialize time (s): {:.6f}", std::chrono::duration<double>(serialize_time).count());
 
     // Comment (Testing only)
     // print_serialize(seq_parse);
@@ -517,6 +547,9 @@ void RLZ::stream_compress(const std::string& seq_file)
     // bits_to_str(seq_bit_array, ".orig.bits");
 
     stream_parse(fm_index, fm_support, occs, seq_file, seq_parse_vec);
+
+    spdlog::debug("Total FM-index time (s): {:.6f}", std::chrono::duration<double>(backward_match_time).count());
+    spdlog::debug("Total SA time (s): {:.6f}", std::chrono::duration<double>(sa_time).count());
     
     // Store tuples of (pos,len) in correct order in vector
     size_t bits_stored = 0;
@@ -542,7 +575,11 @@ void RLZ::stream_compress(const std::string& seq_file)
     spdlog::debug("The sequence was encoded in {} bits", sfile_size * 8);
     spdlog::debug("The rlz parse encodes for {} bits", bits_stored);
 
+    auto serialize_start = std::chrono::high_resolution_clock::now();
     serialize(seq_parse, seq_file);
+    auto serialize_end = std::chrono::high_resolution_clock::now();
+    serialize_time += serialize_end - serialize_start;
+    spdlog::debug("Total serialize time (s): {:.6f}", std::chrono::duration<double>(serialize_time).count());
 
     // Comment (Testing only)
     // print_serialize(seq_parse);
