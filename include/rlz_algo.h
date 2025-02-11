@@ -26,13 +26,13 @@ class RLZ {
         void stream_compress(const std::string& seq_file);
         void compress(int threads);
 
-        void stream_parse(const sdsl::csa_wt<sdsl::wt_huff<sdsl::rrr_vector<127>>, 512, 1024>& fm_index,
+        void stream_parse(const sdsl::csa_wt<sdsl::wt_huff<sdsl::rrr_vector<15>>, 16, 32>& fm_index,
             FM_Wrapper& fm_support,
             const std::map<char, uint64_t>& occs,
             const std::string& seq_file,
             std::vector<std::tuple<uint64_t, uint64_t>>& seq_parse_vec);
 
-        void parse(const sdsl::csa_wt<sdsl::wt_huff<sdsl::rrr_vector<127>>, 512, 1024>& fm_index,
+        void parse(const sdsl::csa_wt<sdsl::wt_huff<sdsl::rrr_vector<15>>, 16, 32>& fm_index,
             FM_Wrapper& fm_support,
             const std::map<char, uint64_t>& occs,
             const sdsl::bit_vector& seq_bit_array,

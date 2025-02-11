@@ -171,7 +171,7 @@ void RLZ_CHAR::load_reverse_file_to_string(const std::string& input_file, std::s
 * 2c. If mismatch, push (prev pos, len - 1) to parse stack. Reset search from char that caused mismatch.
 *
 *
-* @param [in] fm_index [sdsl::csa_wt<sdsl::wt_huff<sdsl::rrr_vector<127>>, 512, 1024>] the fm-index of the reference
+* @param [in] fm_index [sdsl::csa_wt<sdsl::wt_huff<sdsl::rrr_vector<15>>, 16, 32>] the fm-index of the reference
 * @param [in] fm_support [FM_Wrapper] Utility object that allows us to do search and locate queries with fm-index.
 * @param [in] seq_parse_vec_vec [std::vector<std::vector<std::tuple<uint64_t, uint64_t>>>] empty RLZ_CHAR parse vectors equal to number of threads
 * @param [in] num_char_to_process [size_t] the number of chars that should be processed. Useful for the OpenMP parallelization.
@@ -181,7 +181,7 @@ void RLZ_CHAR::load_reverse_file_to_string(const std::string& input_file, std::s
 * @return void
 */
 
-void RLZ_CHAR::parse(const sdsl::csa_wt<sdsl::wt_huff<sdsl::rrr_vector<127>>, 512, 1024>& fm_index,
+void RLZ_CHAR::parse(const sdsl::csa_wt<sdsl::wt_huff<sdsl::rrr_vector<15>>, 16, 32>& fm_index,
         FM_Wrapper& fm_support,
         const std::map<char, uint64_t>& occs, 
         const std::string& seq_content,
@@ -280,7 +280,7 @@ void RLZ_CHAR::parse(const sdsl::csa_wt<sdsl::wt_huff<sdsl::rrr_vector<127>>, 51
 *
 * We stream the sequence file in this function
 *
-* @param [in] fm_index [sdsl::csa_wt<sdsl::wt_huff<sdsl::rrr_vector<127>>, 512, 1024>] the fm-index of the reference
+* @param [in] fm_index [sdsl::csa_wt<sdsl::wt_huff<sdsl::rrr_vector<15>>, 16, 32>] the fm-index of the reference
 * @param [in] fm_support [FM_Wrapper] Utility object that allows us to do search and locate queries with fm-index.
 * @param [in] occs [std::map<char, uint64_t>] the number of occurences of each char in the ref file
 * @param [in] seq_file [std::string] the sequence file.
@@ -289,7 +289,7 @@ void RLZ_CHAR::parse(const sdsl::csa_wt<sdsl::wt_huff<sdsl::rrr_vector<127>>, 51
 * @return void
 */
 
-void RLZ_CHAR::stream_parse(const sdsl::csa_wt<sdsl::wt_huff<sdsl::rrr_vector<127>>, 512, 1024>& fm_index,
+void RLZ_CHAR::stream_parse(const sdsl::csa_wt<sdsl::wt_huff<sdsl::rrr_vector<15>>, 16, 32>& fm_index,
         FM_Wrapper& fm_support,
         const std::map<char, uint64_t>& occs, 
         const std::string& seq_file,
@@ -420,7 +420,7 @@ void RLZ_CHAR::calculate_occs(std::string content, std::map<char, uint64_t>& occ
 
 void RLZ_CHAR::compress(int threads)
 {
-    sdsl::csa_wt<sdsl::wt_huff<sdsl::rrr_vector<127>>, 512, 1024> fm_index;
+    sdsl::csa_wt<sdsl::wt_huff<sdsl::rrr_vector<15>>, 16, 32> fm_index;
     
     // Creates the FM-index
     construct_im(fm_index, ref_content, 1);
@@ -496,7 +496,7 @@ void RLZ_CHAR::compress(int threads)
 
 void RLZ_CHAR::stream_compress(const std::string& seq_file)
 {
-    sdsl::csa_wt<sdsl::wt_huff<sdsl::rrr_vector<127>>, 512, 1024> fm_index;
+    sdsl::csa_wt<sdsl::wt_huff<sdsl::rrr_vector<15>>, 16, 32> fm_index;
     
     // Creates the FM-index
     construct_im(fm_index, ref_content, 1);

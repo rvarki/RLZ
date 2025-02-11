@@ -180,7 +180,7 @@ void RLZ::load_reverse_file_to_bit_vector(const std::string& input_file, sdsl::b
 *
 * Push to parse stack since we process the string in reverse. Popping from stack gives correct order.
 *
-* @param [in] fm_index [sdsl::csa_wt<sdsl::wt_huff<sdsl::rrr_vector<127>>, 512, 1024>] the fm-index of the reference
+* @param [in] fm_index [sdsl::csa_wt<sdsl::wt_huff<sdsl::rrr_vector<15>>, 16, 32>] the fm-index of the reference
 * @param [in] fm_support [FM_Wrapper] Utility object that allows us to do search and locate queries with fm-index.
 * @param [in] seq_parse_vec_vec [std::vector<std::vector<std::tuple<uint64_t, uint64_t>>>] empty RLZ parse vectors equal to number of threads
 * @param [in] num_bits_to_process [size_t] the number of bits that should be processed. Useful for the OpenMP parallelization.
@@ -190,7 +190,7 @@ void RLZ::load_reverse_file_to_bit_vector(const std::string& input_file, sdsl::b
 * @return void
 */
 
-void RLZ::parse(const sdsl::csa_wt<sdsl::wt_huff<sdsl::rrr_vector<127>>, 512, 1024>& fm_index,
+void RLZ::parse(const sdsl::csa_wt<sdsl::wt_huff<sdsl::rrr_vector<15>>, 16, 32>& fm_index,
         FM_Wrapper& fm_support,
         const std::map<char, uint64_t>& occs,
         const sdsl::bit_vector& seq_bit_array,
@@ -289,7 +289,7 @@ void RLZ::parse(const sdsl::csa_wt<sdsl::wt_huff<sdsl::rrr_vector<127>>, 512, 10
 *
 * Push to parse stack since we process the string in reverse. Popping from stack gives correct order.
 *
-* @param [in] fm_index [sdsl::csa_wt<sdsl::wt_huff<sdsl::rrr_vector<127>>, 512, 1024>] the fm-index of the reference
+* @param [in] fm_index [sdsl::csa_wt<sdsl::wt_huff<sdsl::rrr_vector<15>>, 16, 32>] the fm-index of the reference
 * @param [in] fm_support [FM_Wrapper] Utility object that allows us to do search and locate queries with fm-index.
 * @param [in] occs [std::map<char, uint64_t>] the number of occurences of each bit in the ref file
 * @param [in] seq_file [std::string] the sequence file.
@@ -298,7 +298,7 @@ void RLZ::parse(const sdsl::csa_wt<sdsl::wt_huff<sdsl::rrr_vector<127>>, 512, 10
 * @return void
 */
 
-void RLZ::stream_parse(const sdsl::csa_wt<sdsl::wt_huff<sdsl::rrr_vector<127>>, 512, 1024>& fm_index,
+void RLZ::stream_parse(const sdsl::csa_wt<sdsl::wt_huff<sdsl::rrr_vector<15>>, 16, 32>& fm_index,
         FM_Wrapper& fm_support,
         const std::map<char, uint64_t>& occs,
         const std::string& seq_file,
@@ -439,7 +439,7 @@ void RLZ::calculate_occs(std::string content, std::map<char, uint64_t>& occs)
 
 void RLZ::compress(int threads)
 {
-    sdsl::csa_wt<sdsl::wt_huff<sdsl::rrr_vector<127>>, 512, 1024> fm_index;
+    sdsl::csa_wt<sdsl::wt_huff<sdsl::rrr_vector<15>>, 16, 32> fm_index;
     std::string binary_reference_text;
 
     // Convert the reference bit array into its string representation
@@ -523,7 +523,7 @@ void RLZ::compress(int threads)
 
 void RLZ::stream_compress(const std::string& seq_file)
 {
-    sdsl::csa_wt<sdsl::wt_huff<sdsl::rrr_vector<127>>, 512, 1024> fm_index;
+    sdsl::csa_wt<sdsl::wt_huff<sdsl::rrr_vector<15>>, 16, 32> fm_index;
     std::string binary_reference_text;
 
     // Convert the reference bit array into its string representation
