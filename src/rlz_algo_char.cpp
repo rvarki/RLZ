@@ -184,7 +184,7 @@ void RLZ_CHAR::load_reverse_file_to_string(const std::string& input_file, std::s
 void RLZ_CHAR::parse(const sdsl::csa_wt<sdsl::wt_huff<sdsl::rrr_vector<15>>, 16, 32>& fm_index,
         FM_Wrapper& fm_support,
         const std::map<char, uint64_t>& occs, 
-        const std::string& seq_content,
+        const std::string& seq_file,
         std::vector<std::vector<std::tuple<uint64_t, uint64_t>>>& seq_parse_vec_vec,
         size_t num_char_to_process,
         size_t loop_iter,
@@ -195,22 +195,34 @@ void RLZ_CHAR::parse(const sdsl::csa_wt<sdsl::wt_huff<sdsl::rrr_vector<15>>, 16,
     size_t prev_right = fm_index.bwt.size();
     size_t next_left = 0;
     size_t next_right = fm_index.bwt.size();
-    long long int seq_size = static_cast<long long int>(seq_content.size());
 
-    long long int start_loc = (seq_size - 1) - (loop_iter * num_char_to_process);
-    long long int end_loc;
+    std::ifstream sfile(seq_file, std::ios::binary | std::ios::ate);
+    if (!sfile) {
+        spdlog::error("Error opening {}", seq_file);
+        std::exit(EXIT_FAILURE);
+    }
+    
+    size_t seq_size = static_cast<long long int>(sfile.tellg());
+    size_t start_loc = loop_iter * num_char_to_process;
 
-    // Last chunk so process remaining chars
-    if (loop_iter == num_threads - 1)
-        end_loc = -1;
-    // Process chars up to next chunk
-    else
-        end_loc = (seq_size - 1) - ((loop_iter + 1) * num_char_to_process);
-
+    // Move file this many characters
+    sfile.seekg(start_loc, std::ios::beg);
+    
     // Process the file in reverse for backwards matching with FM-index.
-    for (long long int i = start_loc; i > end_loc; i--) 
+    bool retry = false;
+    char next_char;
+    size_t count = 0; // Keep track of how many characters processed
+    while (sfile)
     {
-        char next_char = seq_content[i];
+        if (!retry) {  // Read a new character only if we're not retrying a char
+            sfile.get(next_char);
+            count++;
+            if (count % 10000 == 0){
+                spdlog::debug("******** Thread {}: Processed {} unique chars in sequence file. ********", loop_iter + 1, count);
+            }
+            if (sfile.eof()) break; // Exit if end of file
+            if (count == num_char_to_process + 1) break; // Have processed all the characters this thread should process (The +1 because we increment before processing)
+        }
 
         pattern_len++;
 
@@ -237,10 +249,10 @@ void RLZ_CHAR::parse(const sdsl::csa_wt<sdsl::wt_huff<sdsl::rrr_vector<15>>, 16,
             next_left = 0;
             next_right = fm_index.bwt.size();
             pattern_len = 0;
-            ++i;
+            retry = true;
         }
         // If at the end we are still in a perfect match, we save what we have. 
-        else if (i == end_loc + 1)
+        else if (sfile.peek() == EOF || count == num_char_to_process)
         {
             auto sa_start = std::chrono::high_resolution_clock::now();
             uint64_t sa_pos = fm_support.get_suffix_array_value(fm_index, next_left);
@@ -249,13 +261,16 @@ void RLZ_CHAR::parse(const sdsl::csa_wt<sdsl::wt_huff<sdsl::rrr_vector<15>>, 16,
             auto sa_end = std::chrono::high_resolution_clock::now();
             sa_time_char += sa_end - sa_start;
             seq_parse_vec_vec[loop_iter].emplace_back(std::make_tuple(adjusted_sa_pos, pattern_len));
+            retry = false;
         }
         // Currently in a perfect match
         else{
             prev_left = next_left;
             prev_right = next_right;
+            retry = false;
         }
     }
+    sfile.close();
 }
 
 
@@ -421,7 +436,7 @@ void RLZ_CHAR::calculate_occs(std::string content, std::map<char, uint64_t>& occ
 *
 */
 
-void RLZ_CHAR::compress(int threads)
+void RLZ_CHAR::compress(int threads, const std::string& seq_file)
 {
     sdsl::csa_wt<sdsl::wt_huff<sdsl::rrr_vector<15>>, 16, 32> fm_index;
     
@@ -437,7 +452,23 @@ void RLZ_CHAR::compress(int threads)
     FM_Wrapper fm_support;
 
     std::vector<std::vector<std::tuple<uint64_t, uint64_t>>> seq_parse_vec_vec(threads);
-    size_t num_char_to_process = seq_content.size() / threads;  // Integer division
+
+    std::ifstream sfile(seq_file, std::ios::binary | std::ios::ate); // Opens the file in binary mode and moves indicator to end
+    if (!sfile) {
+        spdlog::error("Error opening {}", seq_file);
+        std::exit(EXIT_FAILURE);
+    }
+    size_t seq_size = static_cast<size_t>(sfile.tellg());
+    sfile.close();
+
+    size_t num_char_to_process;
+    if (threads == 1){
+        num_char_to_process = seq_size;
+    }
+    else{
+        num_char_to_process = seq_size / (threads-1);  // Integer division
+    }
+    spdlog::debug("Each thread will process {} characters", num_char_to_process);
 
     // Comment (Testing only)
     // bits_to_str(seq_bit_array, ".orig.bits");
@@ -445,7 +476,7 @@ void RLZ_CHAR::compress(int threads)
     #pragma omp parallel for schedule(static)
     for (size_t i = 0; i < threads; i++)
     {
-        parse(fm_index, fm_support, occs, seq_content, seq_parse_vec_vec, num_char_to_process, i, threads);
+        parse(fm_index, fm_support, occs, seq_file, seq_parse_vec_vec, num_char_to_process, i, threads);
     }
 
     spdlog::debug("Total FM-index time (s): {:.6f}", std::chrono::duration<double>(backward_match_time_char).count());
@@ -465,7 +496,7 @@ void RLZ_CHAR::compress(int threads)
         }
     }
 
-    spdlog::debug("The sequence was encoded in {} chars", seq_content.size());
+    spdlog::debug("The sequence was encoded in {} chars", seq_size);
     spdlog::debug("The rlz parse encodes for {} chars", chars_stored);
 
     auto serialize_start = std::chrono::high_resolution_clock::now();

@@ -187,7 +187,7 @@ int main(int argc, char **argv)
             // Load the sequence file into memory
             else
             {
-                RLZ_CHAR main_parser(ref_file, seq_file);
+                RLZ_CHAR main_parser(ref_file);
                 auto sw_parser_elapsed = sw_parser.elapsed();
                 spdlog::debug("Built main parser in {:.3} seconds", sw_parser_elapsed.count());
                 spdlog::stopwatch sw_ref;
@@ -195,13 +195,8 @@ int main(int argc, char **argv)
                 main_parser.load_reverse_file_to_string(ref_file, main_parser.ref_content);
                 auto sw_ref_elapsed = sw_ref.elapsed();
                 spdlog::debug("Finished reading file in {:.3} seconds", sw_ref_elapsed.count());
-                spdlog::stopwatch sw_seq;
-                spdlog::debug("Starting to read the sequence file");
-                main_parser.load_reverse_file_to_string(seq_file, main_parser.seq_content);
-                auto sw_seq_elapsed = sw_ref.elapsed();
-                spdlog::debug("Finished reading file in {:.3} seconds", sw_seq_elapsed.count());
                 spdlog::stopwatch sw_compress;
-                main_parser.compress(threads);
+                main_parser.compress(threads, seq_file);
                 auto sw_compress_elapsed = sw_compress.elapsed();
                 spdlog::debug("Compression function finished in {:.3} seconds", sw_compress_elapsed.count());
             }

@@ -24,7 +24,7 @@ class RLZ_CHAR {
         ~RLZ_CHAR();
 
         void stream_compress(const std::string& seq_file);
-        void compress(int threads);
+        void compress(int threads, const std::string& seq_file);
 
         void stream_parse(const sdsl::csa_wt<sdsl::wt_huff<sdsl::rrr_vector<15>>, 16, 32>& fm_index,
             FM_Wrapper& fm_support,
@@ -35,7 +35,7 @@ class RLZ_CHAR {
         void parse(const sdsl::csa_wt<sdsl::wt_huff<sdsl::rrr_vector<15>>, 16, 32>& fm_index,
             FM_Wrapper& fm_support,
             const std::map<char, uint64_t>& occs,
-            const std::string& seq_content,
+            const std::string& seq_file,
             std::vector<std::vector<std::tuple<uint64_t, uint64_t>>>& seq_parse_vec_vec,
             size_t num_bits_to_process,
             size_t loop_iter,
