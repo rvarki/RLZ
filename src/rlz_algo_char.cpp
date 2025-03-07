@@ -190,7 +190,7 @@ void RLZ_CHAR::parse(const sdsl::csa_wt<sdsl::wt_huff<sdsl::rrr_vector<15>>, 16,
         size_t loop_iter,
         size_t num_threads)
 {
-    std::string pattern = "";
+    uint64_t pattern_len = 0;
     size_t prev_left = 0;
     size_t prev_right = fm_index.bwt.size();
     size_t next_left = 0;
@@ -212,7 +212,7 @@ void RLZ_CHAR::parse(const sdsl::csa_wt<sdsl::wt_huff<sdsl::rrr_vector<15>>, 16,
     {
         char next_char = seq_content[i];
 
-        pattern = next_char + pattern;
+        pattern_len++;
 
         std::tuple<size_t,size_t> previous_ranges = std::make_tuple(prev_left, prev_right);
         auto back_start = std::chrono::high_resolution_clock::now();
@@ -224,7 +224,7 @@ void RLZ_CHAR::parse(const sdsl::csa_wt<sdsl::wt_huff<sdsl::rrr_vector<15>>, 16,
 
         // If same then that means no perfect match so we reset.
         if (next_left == next_right){
-            uint64_t pattern_len = pattern.size() - 1; // -1 due to not matching the last character successfully
+            pattern_len--; // -1 due to not matching the last character successfully
             auto sa_start = std::chrono::high_resolution_clock::now();
             uint64_t sa_pos = fm_support.get_suffix_array_value(fm_index, prev_left);
             uint64_t mirrored_sa_pos = fm_index.bwt.size() - 1 - sa_pos; // 0 based involution formula of sa position to correct for the reverse string matching (will give pos in ref where pattern ends)
@@ -236,13 +236,12 @@ void RLZ_CHAR::parse(const sdsl::csa_wt<sdsl::wt_huff<sdsl::rrr_vector<15>>, 16,
             prev_right = fm_index.bwt.size();
             next_left = 0;
             next_right = fm_index.bwt.size();
-            pattern = "";
+            pattern_len = 0;
             ++i;
         }
         // If at the end we are still in a perfect match, we save what we have. 
         else if (i == end_loc + 1)
         {
-            uint64_t pattern_len = pattern.size();
             auto sa_start = std::chrono::high_resolution_clock::now();
             uint64_t sa_pos = fm_support.get_suffix_array_value(fm_index, next_left);
             uint64_t mirrored_sa_pos = fm_index.bwt.size() - 1 - sa_pos;
@@ -295,7 +294,7 @@ void RLZ_CHAR::stream_parse(const sdsl::csa_wt<sdsl::wt_huff<sdsl::rrr_vector<15
         const std::string& seq_file,
         std::vector<std::tuple<uint64_t, uint64_t>>& seq_parse_vec)
 {
-    std::string pattern = "";
+    uint64_t pattern_len = 0;
     size_t prev_left = 0;
     size_t prev_right = fm_index.bwt.size();
     size_t next_left = 0;
@@ -323,7 +322,7 @@ void RLZ_CHAR::stream_parse(const sdsl::csa_wt<sdsl::wt_huff<sdsl::rrr_vector<15
             if (sfile.eof()) break; // Exit if end of file
         }
 
-        pattern = next_char + pattern;
+        pattern_len++;
 
         std::tuple<size_t,size_t> previous_ranges = std::make_tuple(prev_left, prev_right);
         auto back_start = std::chrono::high_resolution_clock::now();
@@ -335,7 +334,7 @@ void RLZ_CHAR::stream_parse(const sdsl::csa_wt<sdsl::wt_huff<sdsl::rrr_vector<15
 
         // If same then that means no perfect match so we reset.
         if (next_left == next_right){
-            uint64_t pattern_len = pattern.size() - 1; // -1 due to not matching the last character successfully
+            pattern_len--; // -1 due to not matching the last character successfully
             auto sa_start = std::chrono::high_resolution_clock::now();
             uint64_t sa_pos = fm_support.get_suffix_array_value(fm_index, prev_left);
             uint64_t mirrored_sa_pos = fm_index.bwt.size() - 1 - sa_pos; // 0 based involution formula of sa position to correct for the reverse string matching (will give pos in ref where pattern ends)
@@ -347,13 +346,12 @@ void RLZ_CHAR::stream_parse(const sdsl::csa_wt<sdsl::wt_huff<sdsl::rrr_vector<15
             prev_right = fm_index.bwt.size();
             next_left = 0;
             next_right = fm_index.bwt.size();
-            pattern = "";
+            pattern_len = 0;
             retry = true;
         }
         // If at the end we are still in a perfect match, we save what we have. 
         else if (sfile.peek() == EOF)
         {
-            uint64_t pattern_len = pattern.size();
             auto sa_start = std::chrono::high_resolution_clock::now();
             uint64_t sa_pos = fm_support.get_suffix_array_value(fm_index, next_left);
             uint64_t mirrored_sa_pos = fm_index.bwt.size() - 1 - sa_pos;
