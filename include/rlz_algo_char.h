@@ -43,7 +43,7 @@ class RLZ_CHAR {
 
         void compress(int threads, const std::string& seq_file);
 
-        void parse(const sdsl::csa_wt<sdsl::wt_huff<sdsl::rrr_vector<15>>, 16, 32>& fm_index,
+        void parse(const rlz_fm_index_t& fm_index,
             FM_Wrapper& fm_support,
             const std::vector<size_t>& occs,
             const std::string& seq_file,
@@ -188,7 +188,7 @@ void RLZ_CHAR<int_t>::load_reverse_file_to_string(const std::string& input_file,
 * 2c. If mismatch, push (prev pos, len - 1) to parse stack. Reset search from char that caused mismatch.
 *
 *
-* @param [in] fm_index [sdsl::csa_wt<sdsl::wt_huff<sdsl::rrr_vector<15>>, 16, 32>] the fm-index of the reference
+* @param [in] fm_index [rlz_fm_index_t] the fm-index of the reference
 * @param [in] fm_support [FM_Wrapper] Utility object that allows us to do search and locate queries with fm-index.
 * @param [in] occs [const std::vector<size_t>&] The compressed F column of the fm-index
 * @param [in] seq_file [const std::string&] the sequence file
@@ -200,7 +200,7 @@ void RLZ_CHAR<int_t>::load_reverse_file_to_string(const std::string& input_file,
 * @return void
 */
 template<typename int_t>
-void RLZ_CHAR<int_t>::parse(const sdsl::csa_wt<sdsl::wt_huff<sdsl::rrr_vector<15>>, 16, 32>& fm_index,
+void RLZ_CHAR<int_t>::parse(const rlz_fm_index_t& fm_index,
         FM_Wrapper& fm_support,
         const std::vector<size_t>& occs, 
         const std::string& seq_file,
@@ -306,7 +306,6 @@ void RLZ_CHAR<int_t>::calculate_occs(std::string& content, std::vector<size_t>& 
     for (char c : content) {
         occs[static_cast<unsigned char>(c)]++;
     }
-    
     size_t running_total = 0;
     for (int i = 0; i < 256; ++i) {
         size_t current_frequency = occs[i];
@@ -339,7 +338,7 @@ void RLZ_CHAR<int_t>::calculate_occs(std::string& content, std::vector<size_t>& 
 template<typename int_t>
 void RLZ_CHAR<int_t>::compress(int threads, const std::string& seq_file)
 {
-    sdsl::csa_wt<sdsl::wt_huff<sdsl::rrr_vector<15>>, 16, 32> fm_index;
+    rlz_fm_index_t fm_index;
     
     // Creates the FM-index
     construct_im(fm_index, ref_content, 1);

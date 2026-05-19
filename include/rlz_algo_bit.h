@@ -43,7 +43,7 @@ class RLZ_BIT {
 
         void compress(int threads, const std::string& seq_file);
 
-        void parse(const sdsl::csa_wt<sdsl::wt_huff<sdsl::rrr_vector<15>>, 16, 32>& fm_index,
+        void parse(const rlz_fm_index_t& fm_index,
             FM_Wrapper& fm_support,
             const std::vector<size_t>& occs,
             const std::string& seq_file,
@@ -200,7 +200,7 @@ void RLZ_BIT<int_t>::load_reverse_file_to_bit_vector(const std::string& input_fi
 *
 * Push to parse stack since we process the string in reverse. Popping from stack gives correct order.
 *
-* @param [in] fm_index [sdsl::csa_wt<sdsl::wt_huff<sdsl::rrr_vector<15>>, 16, 32>] the fm-index of the reference
+* @param [in] fm_index [rlz_fm_index_t] the fm-index of the reference
 * @param [in] fm_support [FM_Wrapper] Utility object that allows us to do search and locate queries with fm-index.
 * @param [in] occs [const std::vector<size_t>&] The compressed F column of the fm-index
 * @param [in] seq_file [const std::string&] the sequence file
@@ -212,7 +212,7 @@ void RLZ_BIT<int_t>::load_reverse_file_to_bit_vector(const std::string& input_fi
 * @return void
 */
 template<typename int_t>
-void RLZ_BIT<int_t>::parse(const sdsl::csa_wt<sdsl::wt_huff<sdsl::rrr_vector<15>>, 16, 32>& fm_index,
+void RLZ_BIT<int_t>::parse(const rlz_fm_index_t& fm_index,
         FM_Wrapper& fm_support,
         const std::vector<size_t>& occs,
         const std::string& seq_file,
@@ -358,7 +358,7 @@ void RLZ_BIT<int_t>::calculate_occs(std::string& content, std::vector<size_t>& o
 template<typename int_t>
 void RLZ_BIT<int_t>::compress(int threads, const std::string& seq_file)
 {
-    sdsl::csa_wt<sdsl::wt_huff<sdsl::rrr_vector<15>>, 16, 32> fm_index;
+    rlz_fm_index_t fm_index;
     std::string binary_reference_text;
 
     // Convert the reference bit array into its string representation
