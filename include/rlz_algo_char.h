@@ -45,7 +45,7 @@ class RLZ_CHAR {
 
         void parse(const sdsl::csa_wt<sdsl::wt_huff<sdsl::rrr_vector<15>>, 16, 32>& fm_index,
             FM_Wrapper& fm_support,
-            const std::map<char, size_t>& occs,
+            const std::vector<size_t>& occs,
             const std::string& seq_file,
             std::vector<std::vector<std::tuple<int_t, int_t>>>& seq_parse_vec_vec,
             size_t num_bits_to_process,
@@ -55,7 +55,7 @@ class RLZ_CHAR {
         void decompress(const std::string& parse_file);
         void load_file_to_string(const std::string& input_file, std::string& content);
         void load_reverse_file_to_string(const std::string& input_file, std::string& content);
-        void calculate_occs(std::string content, std::map<char, size_t>& occs);
+        void calculate_occs(std::string& content, std::vector<size_t>& occs);
         void serialize(const std::vector<std::tuple<int_t, int_t>>& seq_parse, const std::string& seq_file);
         std::vector<std::tuple<int_t, int_t>> deserialize(const std::string& parse_file);
 
@@ -190,7 +190,7 @@ void RLZ_CHAR<int_t>::load_reverse_file_to_string(const std::string& input_file,
 *
 * @param [in] fm_index [sdsl::csa_wt<sdsl::wt_huff<sdsl::rrr_vector<15>>, 16, 32>] the fm-index of the reference
 * @param [in] fm_support [FM_Wrapper] Utility object that allows us to do search and locate queries with fm-index.
-* @param [in] occs [const std::map<char, size_t>&] The compressed F column of the fm-index
+* @param [in] occs [const std::vector<size_t>&] The compressed F column of the fm-index
 * @param [in] seq_file [const std::string&] the sequence file
 * @param [in] seq_parse_vec_vec [std::vector<std::vector<std::tuple<int_t, int_t>>>] empty RLZ_CHAR parse vectors equal to number of threads
 * @param [in] num_char_to_process [size_t] the number of chars that should be processed. Useful for the OpenMP parallelization.
@@ -202,7 +202,7 @@ void RLZ_CHAR<int_t>::load_reverse_file_to_string(const std::string& input_file,
 template<typename int_t>
 void RLZ_CHAR<int_t>::parse(const sdsl::csa_wt<sdsl::wt_huff<sdsl::rrr_vector<15>>, 16, 32>& fm_index,
         FM_Wrapper& fm_support,
-        const std::map<char, size_t>& occs, 
+        const std::vector<size_t>& occs, 
         const std::string& seq_file,
         std::vector<std::vector<std::tuple<int_t, int_t>>>& seq_parse_vec_vec,
         size_t num_char_to_process,
@@ -301,22 +301,17 @@ void RLZ_CHAR<int_t>::parse(const sdsl::csa_wt<sdsl::wt_huff<sdsl::rrr_vector<15
 * @return void
 */
 template<typename int_t>
-void RLZ_CHAR<int_t>::calculate_occs(std::string content, std::map<char, size_t>& occs)
+void RLZ_CHAR<int_t>::calculate_occs(std::string& content, std::vector<size_t>& occs)
 {
-    // Sort the string lexicographically
-    std::sort(content.begin(), content.end());
-    size_t count = 0;
-    char prev_char = '\0';
-
-    for (size_t i = 0; i < content.size(); i++)
-    {
-        if (prev_char != content[i])
-        {
-            occs[content[i]] = count;
-        }
-
-        prev_char = content[i];
-        count++;
+    for (char c : content) {
+        occs[static_cast<unsigned char>(c)]++;
+    }
+    
+    size_t running_total = 0;
+    for (int i = 0; i < 256; ++i) {
+        size_t current_frequency = occs[i];
+        occs[i] = running_total;      
+        running_total += current_frequency; 
     }
 }
 
@@ -351,7 +346,7 @@ void RLZ_CHAR<int_t>::compress(int threads, const std::string& seq_file)
     spdlog::debug("Finished building the FM-index");
 
     // Get the number of occurances of each char in lexicographical order
-    std::map<char, size_t> occs;
+    std::vector<size_t> occs(256, 0);
     calculate_occs(ref_content, occs);
     spdlog::debug("Finished building compressed F column");
 

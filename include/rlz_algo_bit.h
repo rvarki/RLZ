@@ -45,7 +45,7 @@ class RLZ_BIT {
 
         void parse(const sdsl::csa_wt<sdsl::wt_huff<sdsl::rrr_vector<15>>, 16, 32>& fm_index,
             FM_Wrapper& fm_support,
-            const std::map<char, size_t>& occs,
+            const std::vector<size_t>& occs,
             const std::string& seq_file,
             std::vector<std::vector<std::tuple<int_t, int_t>>>& seq_parse_vec_vec,
             size_t num_bits_to_process,
@@ -55,7 +55,7 @@ class RLZ_BIT {
         void decompress(const std::string& parse_file);
         void load_file_to_bit_vector(const std::string& input_file, sdsl::bit_vector& bit_array);
         void load_reverse_file_to_bit_vector(const std::string& input_file, sdsl::bit_vector& bit_array);
-        void calculate_occs(std::string content, std::map<char, size_t>& occs);
+        void calculate_occs(std::string& content, std::vector<size_t>& occs);
         void serialize(const std::vector<std::tuple<int_t, int_t>>& seq_parse, const std::string& seq_file);
         std::vector<std::tuple<int_t, int_t>> deserialize(const std::string& parse_file);
 
@@ -202,7 +202,7 @@ void RLZ_BIT<int_t>::load_reverse_file_to_bit_vector(const std::string& input_fi
 *
 * @param [in] fm_index [sdsl::csa_wt<sdsl::wt_huff<sdsl::rrr_vector<15>>, 16, 32>] the fm-index of the reference
 * @param [in] fm_support [FM_Wrapper] Utility object that allows us to do search and locate queries with fm-index.
-* @param [in] occs [const std::map<char, size_t>&] The compressed F column of the fm-index
+* @param [in] occs [const std::vector<size_t>&] The compressed F column of the fm-index
 * @param [in] seq_file [const std::string&] the sequence file
 * @param [in] seq_parse_vec_vec [std::vector<std::vector<std::tuple<int_t, int_t>>>] empty RLZ parse vectors equal to number of threads
 * @param [in] num_bits_to_process [size_t] the number of bits that should be processed. Useful for the OpenMP parallelization.
@@ -214,7 +214,7 @@ void RLZ_BIT<int_t>::load_reverse_file_to_bit_vector(const std::string& input_fi
 template<typename int_t>
 void RLZ_BIT<int_t>::parse(const sdsl::csa_wt<sdsl::wt_huff<sdsl::rrr_vector<15>>, 16, 32>& fm_index,
         FM_Wrapper& fm_support,
-        const std::map<char, size_t>& occs,
+        const std::vector<size_t>& occs,
         const std::string& seq_file,
         std::vector<std::vector<std::tuple<int_t, int_t>>>& seq_parse_vec_vec,
         size_t num_char_to_process,
@@ -319,22 +319,16 @@ void RLZ_BIT<int_t>::parse(const sdsl::csa_wt<sdsl::wt_huff<sdsl::rrr_vector<15>
 * @return void
 */
 template<typename int_t>
-void RLZ_BIT<int_t>::calculate_occs(std::string content, std::map<char, size_t>& occs)
+void RLZ_BIT<int_t>::calculate_occs(std::string& content, std::vector<size_t>& occs)
 {
-    // Sort the string lexicographically
-    std::sort(content.begin(), content.end());
-    int_t count = 0;
-    char prev_char = '\0';
-
-    for (size_t i = 0; i < content.size(); i++)
-    {
-        if (prev_char != content[i])
-        {
-            occs[content[i]] = count;
-        }
-
-        prev_char = content[i];
-        count++;
+    for (char c : content) {
+        occs[static_cast<unsigned char>(c)]++;
+    }
+    size_t running_total = 0;
+    for (int i = 0; i < 256; ++i) {
+        size_t current_frequency = occs[i];
+        occs[i] = running_total;      
+        running_total += current_frequency; 
     }
 }
 
@@ -375,7 +369,7 @@ void RLZ_BIT<int_t>::compress(int threads, const std::string& seq_file)
     // Creates the FM-index
     construct_im(fm_index, binary_reference_text, 1);
     spdlog::debug("Finished building the FM-index");
-    std::map<char, size_t> occs;
+    std::vector<size_t> occs(256, 0);
     calculate_occs(binary_reference_text, occs);
     spdlog::debug("Finished building compressed F column");
 
