@@ -6,7 +6,7 @@
 */
 
 #include <CLI11.hpp>
-#include "rlz_algo.h"
+#include "rlz_algo_bit.h"
 #include "rlz_algo_char.h"
 #include "spdlog/spdlog.h"
 #include "spdlog/stopwatch.h"
@@ -19,7 +19,7 @@ void run_bit_decompression(const std::string& ref_file, const std::string& parse
     spdlog::debug("Starting to decompress the compressed sequence file");
     spdlog::stopwatch sw;
     spdlog::stopwatch sw_parser;
-    RLZ<int_t> main_parser(ref_file);
+    RLZ_BIT<int_t> main_parser(ref_file);
     auto sw_parser_elapsed = sw_parser.elapsed();
     spdlog::debug("Built main parser in {:.3} seconds", sw_parser_elapsed.count());
     spdlog::debug("Starting to store the reference file as a bit vector");
@@ -37,7 +37,7 @@ void run_bit_decompression(const std::string& ref_file, const std::string& parse
 }
 
 template <typename int_t>
-void run_bit_compression(const std::string& ref_file, const std::string& seq_file, int threads)
+void run_bit_compression(const std::string& ref_file, const std::string& seq_file, int threads, int max_len)
 {
     spdlog::debug("Starting to compress the sequence file");
     spdlog::stopwatch sw;
@@ -45,7 +45,7 @@ void run_bit_compression(const std::string& ref_file, const std::string& seq_fil
     spdlog::debug("The sequence file provided: {}", seq_file);
     spdlog::stopwatch sw_parser;
     // Stream the sequence file
-    RLZ<int_t> main_parser(ref_file);
+    RLZ_BIT<int_t> main_parser(ref_file);
     auto sw_parser_elapsed = sw_parser.elapsed();
     spdlog::debug("Built main parser in {:.3} seconds", sw_parser_elapsed.count());
     spdlog::stopwatch sw_ref;
@@ -97,7 +97,7 @@ void run_char_decompression(const std::string& ref_file, const std::string& pars
 }
 
 template <typename int_t>
-void run_char_compression(const std::string& ref_file, const std::string& seq_file, int threads)
+void run_char_compression(const std::string& ref_file, const std::string& seq_file, int threads, int max_len)
 {
     spdlog::debug("Starting to compress the sequence file");
     spdlog::stopwatch sw;
@@ -144,29 +144,38 @@ int main(int argc, char **argv)
     int verbosity = 0;
     bool clean = false;
     bool bit = false;
+    uint64_t max_len = 0; // 0 means not set
     int threads = 1;
     std::string version = "Version: 1.0.0";
+    
+    // Compress Subcommand
+    auto* compress_cmd = app.add_subcommand("compress", "Compress a sequence file using RLZ");
+    compress_cmd->add_option("-r,--ref", ref_file, "Reference file")->required();
+    compress_cmd->add_option("-s,--seq", seq_file, "Sequence file to compress")->required();
+    compress_cmd->add_option("-t,--threads", threads, "Number of threads to use")->default_val(1);
+    compress_cmd->add_option("-l, --len", max_len, "Maximum length a match can span")->check(CLI::Range(1UL, UINT64_MAX));
+    compress_cmd->add_flag("--bit", bit, "Experimental: Set if ref lacks unique sequence chars");
+    compress_cmd->add_option("-v,--verbosity", verbosity, "Set verbosity level (0 = info, 1 = debug, 2 = trace)")->check(CLI::Range(0, 2))->default_val(0);   
 
-    app.add_option("-r,--ref", ref_file, "The reference file to be used for compression")->configurable()->required();
-    app.add_option("-s,--seq", seq_file, "The sequence file to compress")->configurable();
-    app.add_option("-p,--parse", parse_file, "The RLZ parse file to be decompressed.")->configurable();
-    app.add_option("-t,--threads", threads, "Number of threads")->configurable();
-    app.add_flag("-d,--decompress", decompress, "Decompress the RLZ parse into the original sequence file")->configurable();
-    app.add_flag("--bit", bit, "Set if the reference does not contain all the unique sequence characters")->configurable();
-    app.add_option("-v,--verbosity", verbosity, "Set verbosity level (0 = none, 1 = basic, 2 = detailed)")->default_val(0);
+    // Decompress Subcommand
+    auto* decompress_cmd = app.add_subcommand("decompress", "Decompress an RLZ parse file");
+    decompress_cmd->add_option("-r,--ref", ref_file, "Reference file")->required();
+    decompress_cmd->add_option("-p,--parse", parse_file, "RLZ parse file to decompress")->required();
+    decompress_cmd->add_option("-l, --len", max_len, "Maximum length a match can span (must be specified if used for compression)")->check(CLI::Range(1UL, UINT64_MAX));
+    decompress_cmd->add_flag("--bit", bit, "Experimental: Set if ref lacks unique sequence chars (must be specified if used for compression)");
+    decompress_cmd->add_option("-v,--verbosity", verbosity, "Set verbosity level (0 = info, 1 = debug, 2 = trace)")->check(CLI::Range(0, 2))->default_val(0);   
+
+    // Choose between compression or decompression subcommand
+    app.require_subcommand(1, 1); 
+
+    // Set version flag
     app.set_version_flag("--version", version);
+
+    // Footer Updates
     app.footer("Example usage:\n"
-           "  Default:\n"
-           "    Compress: ./rlz -r reference.fasta -s sequence.fasta\n"
-           "    Compress: ./rlz --ref reference.fasta --seq sequence.fasta\n"
-           "    Decompress: ./rlz -r reference.fasta -p sequence.fasta.rlz -d\n"
-           "    Decompress: ./rlz --ref reference.fasta --parse sequence.fasta.rlz --decompress\n"
-           "  Bit-Level:\n"
-           "    Compress: ./rlz -r reference.fasta -s sequence.fasta --bit\n"
-           "    Compress: ./rlz --ref reference.fasta --seq sequence.fasta --bit\n"
-           "    Decompress: ./rlz -r reference.fasta -p sequence.fasta.rlz -d --bit\n"
-           "    Decompress: ./rlz --ref reference.fasta --parse sequence.fasta.rlz --bit --decompress\n");
-    app.description("RLZ compression tool");
+               "  ./rlz compress -r reference.fasta -s sequence.fasta [--bit] [--len [int] ]\n"
+               "  ./rlz decompress -r reference.fasta -p sequence.fasta.rlz [--bit] [--len [int] ]\n");
+
     CLI11_PARSE(app, argc, argv);
 
     if (verbosity == 2) {
@@ -178,112 +187,114 @@ int main(int argc, char **argv)
     else if (verbosity == 0){ 
         spdlog::set_level(spdlog::level::info);
     }
-    else{
-        spdlog::error("Set verbosity level to be 0,1,2");
-    }
-
-    if (bit)
+    
+    if (compress_cmd->parsed())
     {
-        if (decompress)
-        {
-            spdlog::info("Bit alphabet decompression enabled");
-            if (app.count("-r") == 0){
-                spdlog::error("Please provide the reference file used to compress the RLZ parse with -r or --ref");
-                std::cout << app.help() << std::endl;
-                return -1;
-            }
-            if (app.count("-p") == 0){
-                spdlog::error("Please provide the RLZ parse to decompress with -p or --parse");
-                std::cout << app.help() << std::endl;
-                return -1;
-            }
-
-            uintmax_t ref_size = std::filesystem::file_size(ref_file); //bytes
-            uintmax_t ref_size_bits = ref_size * 8;
-            if (ref_size_bits <= UINT8_MAX) { spdlog::info("Will decode with uint8_t"); run_bit_decompression<uint8_t>(ref_file, parse_file); }
-            else if (ref_size_bits <= UINT16_MAX) { spdlog::info("Will decode with uint16_t"); run_bit_decompression<uint16_t>(ref_file, parse_file); }
-            else if (ref_size_bits <= UINT32_MAX) { spdlog::info("Will decode with uint32_t"); run_bit_decompression<uint32_t>(ref_file, parse_file); }
-            else if (ref_size_bits <= UINT64_MAX) { spdlog::info("Will decode with uint64_t"); run_bit_decompression<uint64_t>(ref_file, parse_file); }
-            else{
-                spdlog::error("Reference file is too large! Are you sure you have provided the correct reference.");
-                exit(1);
-            }
-        }
-        else
+        // Encode with "bit" level compression
+        if (bit)
         {
             spdlog::info("Bit alphabet compression enabled");
-            if (app.count("-r") == 0){
-                spdlog::error("Please provide a reference file to compress against with -r or --ref");
-                std::cout << app.help() << std::endl;
-                return -1;
-            }
-            if (app.count("-s") == 0){
-                spdlog::error("Please provide a sequence file to compress with -s or --seq");
-                std::cout << app.help() << std::endl;
-                return -1;
+            uintmax_t upper_bound_bits = 0;
+
+            // Determine size of parse entries
+            if (max_len > 0) {
+                spdlog::info("Using the specified match-length constraint to determine entry size");
+                upper_bound_bits = max_len * 8;
+            } else {
+                spdlog::info("Using the reference size constraint to determine entry size");
+                uintmax_t ref_size = std::filesystem::file_size(ref_file); // bytes
+                upper_bound_bits = ref_size * 8;
             }
 
-            uintmax_t ref_size = std::filesystem::file_size(ref_file); //bytes
-            uintmax_t ref_size_bits = ref_size * 8;
-            if (ref_size_bits <= UINT8_MAX) { spdlog::info("Will encode with uint8_t"); run_bit_compression<uint8_t>(ref_file, seq_file, threads); }
-            else if (ref_size_bits <= UINT16_MAX) { spdlog::info("Will encoding with uint16_t"); run_bit_compression<uint16_t>(ref_file, seq_file, threads); }
-            else if (ref_size_bits <= UINT32_MAX) { spdlog::info("Will encoding with uint32_t"); run_bit_compression<uint32_t>(ref_file, seq_file, threads); }
-            else if (ref_size_bits <= UINT64_MAX) { spdlog::info("Will encoding with uint64_t"); run_bit_compression<uint64_t>(ref_file, seq_file, threads); }
+            if (upper_bound_bits <= UINT8_MAX) { spdlog::info("Encoding entries with uint8_t"); run_bit_compression<uint8_t>(ref_file, seq_file, threads, max_len * 8); }
+            else if (upper_bound_bits <= UINT16_MAX) { spdlog::info("Encoding entries with uint16_t"); run_bit_compression<uint16_t>(ref_file, seq_file, threads, max_len * 8); }
+            else if (upper_bound_bits <= UINT32_MAX) { spdlog::info("Encoding entries with uint32_t"); run_bit_compression<uint32_t>(ref_file, seq_file, threads, max_len * 8); }
+            else if (upper_bound_bits <= UINT64_MAX) { spdlog::info("Encoding entries with uint64_t"); run_bit_compression<uint64_t>(ref_file, seq_file, threads, max_len * 8); }
             else{
-                spdlog::error("Reference file is too large! Choose a smaller reference file.");
+                spdlog::error("Determined size is too large! Check your reference file or maximum match length parameter.");
                 exit(1);
             }
         }
-    }
-    else
-    {
-        if (decompress)
-        {
-            spdlog::info("Original alphabet decompression enabled");
-            if (app.count("-r") == 0){
-                spdlog::error("Please provide the reference file used to compress the RLZ parse with -r or --ref");
-                std::cout << app.help() << std::endl;
-                return -1;
-            }
-            if (app.count("-p") == 0){
-                spdlog::error("Please provide the RLZ parse to decompress with -p or --parse");
-                std::cout << app.help() << std::endl;
-                return -1;
-            }
-            uintmax_t ref_size = std::filesystem::file_size(ref_file); //bytes
-            if (ref_size <= UINT8_MAX) { spdlog::info("Will decode with uint8_t"); run_char_decompression<uint8_t>(ref_file, parse_file); }
-            else if (ref_size <= UINT16_MAX) { spdlog::info("Will decode with uint16_t"); run_char_decompression<uint16_t>(ref_file, parse_file); }
-            else if (ref_size <= UINT32_MAX) { spdlog::info("Will decode with uint32_t"); run_char_decompression<uint32_t>(ref_file, parse_file); }
-            else if (ref_size <= UINT64_MAX) { spdlog::info("Will decode with uint64_t"); run_char_decompression<uint64_t>(ref_file, parse_file); }
-            else{
-                spdlog::error("Reference file is too large! Are you sure you have provided the correct reference.");
-                exit(1);
-            }
-        }
+        // Encode with regular alphabet compression
         else
         {
             spdlog::info("Original alphabet compression enabled");
-            if (app.count("-r") == 0){
-                spdlog::error("Please provide a reference file to compress against with -r or --ref");
-                std::cout << app.help() << std::endl;
-                return -1;
+            uintmax_t upper_bound = 0;
+
+            // Determine size of parse entries
+            if (max_len > 0) {
+                spdlog::info("Using the specified match-length constraint to determine entry size");
+                upper_bound = max_len;
+            } else {
+                spdlog::info("Using the reference size constraint to determine entry size");
+                upper_bound = std::filesystem::file_size(ref_file); // bytes
             }
-            if (app.count("-s") == 0){
-                spdlog::error("Please provide a sequence file to compress  with -s or --seq");
-                std::cout << app.help() << std::endl;
-                return -1;
-            }
-            uintmax_t ref_size = std::filesystem::file_size(ref_file); //bytes
-            if (ref_size <= UINT8_MAX) { spdlog::info("Will encode with uint8_t"); run_bit_compression<uint8_t>(ref_file, seq_file, threads); }
-            else if (ref_size <= UINT16_MAX) { spdlog::info("Will encode with uint16_t"); run_char_compression<uint16_t>(ref_file, seq_file, threads); }
-            else if (ref_size <= UINT32_MAX) { spdlog::info("Will encode with uint32_t"); run_char_compression<uint32_t>(ref_file, seq_file, threads); }
-            else if (ref_size <= UINT64_MAX) { spdlog::info("Will encode with uint64_t"); run_char_compression<uint64_t>(ref_file, seq_file, threads); }
+
+            if (upper_bound <= UINT8_MAX) { spdlog::info("Encoding entries with uint8_t"); run_bit_compression<uint8_t>(ref_file, seq_file, threads, max_len); }
+            else if (upper_bound <= UINT16_MAX) { spdlog::info("Encoding entries with uint16_t"); run_char_compression<uint16_t>(ref_file, seq_file, threads, max_len); }
+            else if (upper_bound <= UINT32_MAX) { spdlog::info("Encoding entries with uint32_t"); run_char_compression<uint32_t>(ref_file, seq_file, threads, max_len); }
+            else if (upper_bound <= UINT64_MAX) { spdlog::info("Encoding entries with uint64_t"); run_char_compression<uint64_t>(ref_file, seq_file, threads, max_len); }
             else{
-                spdlog::error("Reference file is too large! Choose a smaller reference file.");
+                spdlog::error("Determined size is too large! Check your reference file or maximum match length parameter.");
                 exit(1);
             }
         }
     }
+    else if (decompress_cmd->parsed())
+    {
+        // Encoded with "bit" level compression 
+        if (bit)
+        {
+            spdlog::info("Bit alphabet decompression enabled");
+            uintmax_t upper_bound_bits = 0;
+
+            // Determine size of parse entries
+            if (max_len > 0) {
+                spdlog::info("Using the specified match-length constraint to determine entry size");
+                upper_bound_bits = max_len * 8;
+            } else {
+                spdlog::info("Using the reference size constraint to determine entry size");
+                uintmax_t ref_size = std::filesystem::file_size(ref_file); // bytes
+                upper_bound_bits = ref_size * 8;
+            }
+
+            // Entries are decoded dynamically by upper bound specified
+            if (upper_bound_bits <= UINT8_MAX) { spdlog::info("Assuming entries were encoded with uint8_t"); run_bit_decompression<uint8_t>(ref_file, parse_file); }
+            else if (upper_bound_bits <= UINT16_MAX) { spdlog::info("Assuming entries were encoded with uint16_t"); run_bit_decompression<uint16_t>(ref_file, parse_file); }
+            else if (upper_bound_bits <= UINT32_MAX) { spdlog::info("Assuming entries were encoded with uint32_t"); run_bit_decompression<uint32_t>(ref_file, parse_file); }
+            else if (upper_bound_bits <= UINT64_MAX) { spdlog::info("Assuming entries were encoded with uint64_t"); run_bit_decompression<uint64_t>(ref_file, parse_file); }
+            else{
+                spdlog::error("Determined size is too large! Check your reference file or maximum match length parameter.");
+                exit(1);
+            }
+        }
+        // Encoded with regular alphabet compression
+        else
+        {
+            spdlog::info("Original alphabet decompression enabled");
+            uintmax_t upper_bound = 0;
+
+            // Determine size of parse entries
+            if (max_len > 0) {
+                spdlog::info("Using the specified match-length constraint to determine entry size");
+                upper_bound = max_len;
+            } else {
+                spdlog::info("Using the reference size constraint to determine entry size");
+                upper_bound = std::filesystem::file_size(ref_file); // bytes
+            }
+
+            // Entries are decoded dynamically by upper bound specified
+            if (upper_bound <= UINT8_MAX) { spdlog::info("Assuming entries were encoded with uint8_t"); run_char_decompression<uint8_t>(ref_file, parse_file); }
+            else if (upper_bound <= UINT16_MAX) { spdlog::info("Assuming entries were encoded with uint16_t"); run_char_decompression<uint16_t>(ref_file, parse_file); }
+            else if (upper_bound <= UINT32_MAX) { spdlog::info("Assuming entries were encoded with uint32_t"); run_char_decompression<uint32_t>(ref_file, parse_file); }
+            else if (upper_bound <= UINT64_MAX) { spdlog::info("Assuming entries were encoded with uint64_t"); run_char_decompression<uint64_t>(ref_file, parse_file); }
+            else{
+                spdlog::error("Determined size is too large! Check your reference file or maximum match length parameter.");
+                exit(1);
+            }
+        }
+    }
+    else{ spdlog::error("Neither compression or decompression. This condition should be impossible!"); }
     
     return 0;
 }

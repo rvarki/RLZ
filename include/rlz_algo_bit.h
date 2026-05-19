@@ -5,8 +5,8 @@
 * See the LICENSE file or <https://www.gnu.org/licenses/> for details.
 */
 
-#ifndef RLZ_ALGO_H
-#define RLZ_ALGO_H
+#ifndef RLZ_ALGO_BIT_H
+#define RLZ_ALGO_BIT_H
 
 #include "fm_wrapper.h"
 #include <sdsl/bit_vectors.hpp>
@@ -33,13 +33,13 @@ std::chrono::duration<double> sa_time{0.0};
 std::chrono::duration<double> serialize_time{0.0};
 
 template <typename int_t>
-class RLZ {
+class RLZ_BIT {
     public:
         std::string ref_file;
         sdsl::bit_vector ref_bit_array;
 
-        RLZ(const std::string ref_file);
-        ~RLZ();
+        RLZ_BIT(const std::string ref_file);
+        ~RLZ_BIT();
 
         void compress(int threads, const std::string& seq_file);
 
@@ -65,20 +65,20 @@ class RLZ {
 
 
 /**
-* @brief Constuctor of RLZ class.
+* @brief Constuctor of RLZ_BIT class.
 * @param[in] ref_file [string] Path to reference file 
 */
 template<typename int_t>
-RLZ<int_t>::RLZ(const std::string ref_file): ref_file(ref_file){}
+RLZ_BIT<int_t>::RLZ_BIT(const std::string ref_file): ref_file(ref_file){}
 
 /**
-* @brief Destructor of RLZ class.
+* @brief Destructor of RLZ_BIT class.
 *
 * Currently does nothing.
 *
 */
 template<typename int_t>
-RLZ<int_t>::~RLZ(){}
+RLZ_BIT<int_t>::~RLZ_BIT(){}
 
 /**
 * @brief Loads the file content into a bit vector.
@@ -93,7 +93,7 @@ RLZ<int_t>::~RLZ(){}
 * @return void
 */
 template<typename int_t>
-void RLZ<int_t>::load_file_to_bit_vector(const std::string& input_file, sdsl::bit_vector& bit_array)
+void RLZ_BIT<int_t>::load_file_to_bit_vector(const std::string& input_file, sdsl::bit_vector& bit_array)
 {
     spdlog::stopwatch sw_convert;
     spdlog::debug("Reading file and creating bit array");
@@ -142,7 +142,7 @@ void RLZ<int_t>::load_file_to_bit_vector(const std::string& input_file, sdsl::bi
 * @return void
 */
 template<typename int_t>
-void RLZ<int_t>::load_reverse_file_to_bit_vector(const std::string& input_file, sdsl::bit_vector& bit_array)
+void RLZ_BIT<int_t>::load_reverse_file_to_bit_vector(const std::string& input_file, sdsl::bit_vector& bit_array)
 {
     spdlog::stopwatch sw_convert;
     spdlog::debug("Reading file and creating bit array");
@@ -212,7 +212,7 @@ void RLZ<int_t>::load_reverse_file_to_bit_vector(const std::string& input_file, 
 * @return void
 */
 template<typename int_t>
-void RLZ<int_t>::parse(const sdsl::csa_wt<sdsl::wt_huff<sdsl::rrr_vector<15>>, 16, 32>& fm_index,
+void RLZ_BIT<int_t>::parse(const sdsl::csa_wt<sdsl::wt_huff<sdsl::rrr_vector<15>>, 16, 32>& fm_index,
         FM_Wrapper& fm_support,
         const std::map<char, size_t>& occs,
         const std::string& seq_file,
@@ -319,7 +319,7 @@ void RLZ<int_t>::parse(const sdsl::csa_wt<sdsl::wt_huff<sdsl::rrr_vector<15>>, 1
 * @return void
 */
 template<typename int_t>
-void RLZ<int_t>::calculate_occs(std::string content, std::map<char, size_t>& occs)
+void RLZ_BIT<int_t>::calculate_occs(std::string content, std::map<char, size_t>& occs)
 {
     // Sort the string lexicographically
     std::sort(content.begin(), content.end());
@@ -362,7 +362,7 @@ void RLZ<int_t>::calculate_occs(std::string content, std::map<char, size_t>& occ
 *
 */
 template<typename int_t>
-void RLZ<int_t>::compress(int threads, const std::string& seq_file)
+void RLZ_BIT<int_t>::compress(int threads, const std::string& seq_file)
 {
     sdsl::csa_wt<sdsl::wt_huff<sdsl::rrr_vector<15>>, 16, 32> fm_index;
     std::string binary_reference_text;
@@ -447,7 +447,7 @@ void RLZ<int_t>::compress(int threads, const std::string& seq_file)
 * @return void
 */
 template<typename int_t>
-void RLZ<int_t>::serialize(const std::vector<std::tuple<int_t, int_t>>& seq_parse, const std::string& seq_file)
+void RLZ_BIT<int_t>::serialize(const std::vector<std::tuple<int_t, int_t>>& seq_parse, const std::string& seq_file)
 {
     std::ofstream ofs(seq_file + ".rlz", std::ios::binary);
     if (!ofs) {
@@ -476,7 +476,7 @@ void RLZ<int_t>::serialize(const std::vector<std::tuple<int_t, int_t>>& seq_pars
 * @return Return the vector.
 */
 template<typename int_t>
-std::vector<std::tuple<int_t, int_t>> RLZ<int_t>::deserialize(const std::string& parse_file)
+std::vector<std::tuple<int_t, int_t>> RLZ_BIT<int_t>::deserialize(const std::string& parse_file)
 {
     std::ifstream ifs(parse_file, std::ios::binary);
     if (!ifs) {
@@ -519,7 +519,7 @@ std::vector<std::tuple<int_t, int_t>> RLZ<int_t>::deserialize(const std::string&
 * @warning might have to change int to long long int depending on size
 */
 template<typename int_t>
-void RLZ<int_t>::decompress(const std::string& parse_file)
+void RLZ_BIT<int_t>::decompress(const std::string& parse_file)
 {
     std::vector<std::tuple<int_t, int_t>> seq_parse = deserialize(parse_file);
     
@@ -592,7 +592,7 @@ void RLZ<int_t>::decompress(const std::string& parse_file)
 *
 */
 template<typename int_t>
-void RLZ<int_t>::bits_to_str(sdsl::bit_vector bit_array, std::string ext)
+void RLZ_BIT<int_t>::bits_to_str(sdsl::bit_vector bit_array, std::string ext)
 {
     std::string bitstr;
     for (size_t i = 0; i < bit_array.size(); ++i) {
@@ -626,7 +626,7 @@ void RLZ<int_t>::bits_to_str(sdsl::bit_vector bit_array, std::string ext)
 * @return void
 */
 template<typename int_t>
-void RLZ<int_t>::print_serialize(const std::vector<std::tuple<int_t, int_t>>& seq_parse, const std::string& seq_file)
+void RLZ_BIT<int_t>::print_serialize(const std::vector<std::tuple<int_t, int_t>>& seq_parse, const std::string& seq_file)
 {
     std::ofstream ofs(seq_file + ".readable.rlz");
     if (!ofs) {
@@ -641,4 +641,4 @@ void RLZ<int_t>::print_serialize(const std::vector<std::tuple<int_t, int_t>>& se
     ofs.close();
 }
 
-#endif  // RLZ_ALGO_H
+#endif  // RLZ_ALGO_BIT_H
