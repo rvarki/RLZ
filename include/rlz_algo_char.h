@@ -15,9 +15,10 @@
 #include <sdsl/suffix_arrays.hpp>
 #include <sdsl/int_vector.hpp>
 #include <fstream>
+#include <system_error>
+#include <filesystem>
 #include <vector>
 #include <tuple>
-#include <map>
 #include <string>
 #include <cstdlib>
 #include <cstdio>
@@ -53,9 +54,9 @@ class RLZ_CHAR {
             size_t num_threads);
 
         void decompress(const std::string& parse_file);
-        void load_file_to_string(const std::string& input_file, std::string& content);
-        void load_reverse_file_to_string(const std::string& input_file, std::string& content);
-        void calculate_occs(std::string& content, std::vector<size_t>& occs);
+        void load_reference(const std::string& ref_file, std::string& ref_content);
+        void load_reverse_reference(const std::string& ref_file, std::string& ref_content);
+        void calculate_occs(std::string& ref_content, std::vector<size_t>& occs);
         void serialize(const std::vector<std::tuple<int_t, int_t>>& seq_parse, const std::string& seq_file);
         std::vector<std::tuple<int_t, int_t>> deserialize(const std::string& parse_file);
 
@@ -79,94 +80,98 @@ template<typename int_t>
 RLZ_CHAR<int_t>::~RLZ_CHAR(){}
 
 /**
-* @brief Loads the file content into a string.
+* @brief Reads the reference and stores its content
 *
-* Loads the file content directly into a string. Opens the input file in binary mode
-* and moves pointer at end of file to get file size quickly. We then resize the string
-* to be large enough to hold the file content in bytes.   
+* Loads the reference directly into a string. Obtains the file size
+* using filesystem metadata and performs an efficient bulk binary read.   
 *
-* @param[in] input_file [string] Path to either the reference or sequence file 
-* @param[in] content [string] Where the string representation of the file is located.
+* @param[in] ref_file Path to the reference file
+* @param[in] ref_content Place where the reference content is stored.
 * @return void
 */
 template<typename int_t>
-void RLZ_CHAR<int_t>::load_file_to_string(const std::string& input_file, std::string& content)
+void RLZ_CHAR<int_t>::load_reference(const std::string& ref_file, std::string& ref_content)
 {
+    spdlog::debug("Reading reference content");
     spdlog::stopwatch sw_convert;
-    spdlog::debug("Storing file as string");
 
-    // std::ios::ate moves cursor to end of file
-    std::ifstream file(input_file, std::ios::binary | std::ios::ate);
-    if (!file) {
-        spdlog::error("Error opening {}", input_file);
+    // Getting size of reference
+    std::error_code ec;
+    uintmax_t ref_size = std::filesystem::file_size(ref_file, ec);
+    if (ec) {
+        spdlog::error("Error getting file size for {}: {}", ref_file, ec.message());
         std::exit(EXIT_FAILURE);
     }
 
-    // Get the file size in bytes
-    std::streamsize file_size = file.tellg();
-    // std::ios::beg moves cursor to beginning
-    file.seekg(0, std::ios::beg);
-
-    // Resize the content field
-    content.resize(file_size);
-
-    // Load the file as string
-    if (file.read(&content[0], file_size)) {
-        spdlog::debug("File read successfully.");
-    } else {
-        spdlog::error("Error reading file: {}", input_file);
+    // Opening reference
+    std::ifstream ref(ref_file, std::ios::binary);
+    if (!ref) {
+        spdlog::error("Error opening {}", ref_file);
         std::exit(EXIT_FAILURE);
     }
 
-    file.close();
+    // Preloading size of reference buffer
+    ref_content.resize(ref_size);
+
+    // Directly loading the reference into buffer
+    if (!ref.read(&ref_content[0], ref_size)) {
+        spdlog::error("Error reading data from {}", ref_file);
+        std::exit(EXIT_FAILURE);
+    }
+    ref.close();
+
     auto sw_convert_elapsed = sw_convert.elapsed();
-    spdlog::debug("Finished storing file in {:.3} seconds", sw_convert_elapsed.count());
+    spdlog::debug("Finished reading file in {:.3} seconds", sw_convert_elapsed.count());
 }
 
+
 /**
-* @brief Loads the reversed file content into a string.
+* @brief Reads the reference and stores the reversed content.
 *
-* Loads the reversed file content directly into a string. Opens the input file in binary mode
-* and moves pointer at end of file to get file size quickly. We then resize the string
-* to be large enough to hold the file content in bytes.  
+* Loads the reversed reference directly into a string. Obtains the file size
+* using filesystem metadata, performs a bulk binary read, and reverses the 
+* sequence efficiently in memory.
 *
-* @param[in] input_file [string] Path to either the reference or sequence file 
-* @param[in] content [string] Where the string representation of the file is located.
+* @param[in] ref_file Path to the reference file
+* @param[in] ref_content Place where reversed content is stored.
 * @return void
 */
 template<typename int_t>
-void RLZ_CHAR<int_t>::load_reverse_file_to_string(const std::string& input_file, std::string& content)
+void RLZ_CHAR<int_t>::load_reverse_reference(const std::string& ref_file, std::string& ref_content)
 {
+    spdlog::debug("Reading reversed reference content");
     spdlog::stopwatch sw_convert;
-    spdlog::debug("Storing file as string");
 
-    // std::ios::ate moves cursor to end of file
-    std::ifstream file(input_file, std::ios::binary | std::ios::ate);
-    if (!file) {
-        spdlog::error("Error opening {}", input_file);
+    // Getting size of reference
+    std::error_code ec;
+    uintmax_t ref_size = std::filesystem::file_size(ref_file, ec);
+    if (ec) {
+        spdlog::error("Error getting file size for {}: {}", ref_file, ec.message());
         std::exit(EXIT_FAILURE);
     }
 
-    // Get the file size in bytes
-    std::streamsize file_size = file.tellg();
-    // std::ios::beg moves cursor to beginning
-    file.seekg(0, std::ios::beg);
-
-    // Resize the content field
-    content.resize(file_size);
-
-    // Efficiently read and build the reversed string
-    for (std::streamsize i = 0; i < file_size; ++i) {
-        char byte;
-        file.get(byte); // Read a byte from the file
-        content[file_size - 1 - i] = byte; // Place it at the reverse position
+    // Opening reference
+    std::ifstream ref(ref_file, std::ios::binary);
+    if (!ref) {
+        spdlog::error("Error opening {}", ref_file);
+        std::exit(EXIT_FAILURE);
     }
 
-    spdlog::debug("File read successfully.");
+    // Preloading size of reference buffer
+    ref_content.resize(ref_size);
 
-    file.close();
+    // Directly loading the reference into buffer
+    if (!ref.read(&ref_content[0], ref_size)) {
+        spdlog::error("Error reading data from {}", ref_file);
+        std::exit(EXIT_FAILURE);
+    }
+    ref.close();
+
+    // Reversing reference
+    std::reverse(ref_content.begin(), ref_content.end());
+
     auto sw_convert_elapsed = sw_convert.elapsed();
-    spdlog::debug("Finished storing file in {:.3} seconds", sw_convert_elapsed.count());
+    spdlog::debug("Finished reading file in {:.3} seconds", sw_convert_elapsed.count());
 }
 
 /**
@@ -294,16 +299,17 @@ void RLZ_CHAR<int_t>::parse(const rlz_fm_index_t& fm_index,
 
 
 /** 
-* @brief Calculates the occurances of each char in the provided text in lexicographical order
-*
-* @param [in] content [string] The string which we are deriving the occurances from
-*
+* @brief Builds the compressed F column of BWT matrix of reference
+* @param [in] ref_content [string] The reference file 
 * @return void
 */
 template<typename int_t>
-void RLZ_CHAR<int_t>::calculate_occs(std::string& content, std::vector<size_t>& occs)
+void RLZ_CHAR<int_t>::calculate_occs(std::string& ref_content, std::vector<size_t>& occs)
 {
-    for (char c : content) {
+    spdlog::debug("Constructing compressed F column of reference");
+    spdlog::stopwatch sw_occs;
+
+    for (char c : ref_content) {
         occs[static_cast<unsigned char>(c)]++;
     }
     size_t running_total = 0;
@@ -312,6 +318,9 @@ void RLZ_CHAR<int_t>::calculate_occs(std::string& content, std::vector<size_t>& 
         occs[i] = running_total;      
         running_total += current_frequency; 
     }
+
+    auto sw_occs_elapsed = sw_occs.elapsed();
+    spdlog::debug("Finished building compressed F column in {:.3} seconds", sw_occs_elapsed.count());
 }
 
 
@@ -338,16 +347,20 @@ void RLZ_CHAR<int_t>::calculate_occs(std::string& content, std::vector<size_t>& 
 template<typename int_t>
 void RLZ_CHAR<int_t>::compress(int threads, const std::string& seq_file)
 {
+    spdlog::stopwatch sw_compress;
+
     rlz_fm_index_t fm_index;
     
     // Creates the FM-index
+    spdlog::debug("Building FM-index of reversed reference");
+    spdlog::stopwatch sw_fm_index;
     construct_im(fm_index, ref_content, 1);
-    spdlog::debug("Finished building the FM-index");
+    auto sw_fm_index_elapsed = sw_fm_index.elapsed();
+    spdlog::debug("Finished building FM-index in {:.3} seconds", sw_fm_index_elapsed.count());
 
     // Get the number of occurances of each char in lexicographical order
     std::vector<size_t> occs(256, 0);
     calculate_occs(ref_content, occs);
-    spdlog::debug("Finished building compressed F column");
 
     FM_Wrapper fm_support;
 
@@ -376,8 +389,8 @@ void RLZ_CHAR<int_t>::compress(int threads, const std::string& seq_file)
         parse(fm_index, fm_support, occs, seq_file, seq_parse_vec_vec, num_char_to_process, i, threads);
     }
 
-    spdlog::debug("Total FM-index time (s): {:.6f}", std::chrono::duration<double>(backward_match_time_char).count());
-    spdlog::debug("Total SA time (s): {:.6f}", std::chrono::duration<double>(sa_time_char).count());
+    spdlog::debug("Total time spent processing occurrences (s): {:.6f}", std::chrono::duration<double>(backward_match_time_char).count());
+    spdlog::debug("Total time spent processing locations (s): {:.6f}", std::chrono::duration<double>(sa_time_char).count());
 
     // Store tuples of (pos,len) in correct order in vector
     size_t chars_stored = 0;
@@ -392,14 +405,14 @@ void RLZ_CHAR<int_t>::compress(int threads, const std::string& seq_file)
         }
     }
 
-    spdlog::debug("The sequence was encoded in {} chars", seq_size);
+    spdlog::debug("The sequence file contained {} chars", seq_size);
     spdlog::debug("The rlz parse encodes for {} chars", chars_stored);
 
-    auto serialize_start = std::chrono::high_resolution_clock::now();
+    // Serialize the RLZ parse
     serialize(seq_parse, seq_file);
-    auto serialize_end = std::chrono::high_resolution_clock::now();
-    serialize_time_char += serialize_end - serialize_start;
-    spdlog::debug("Total serialize time (s): {:.6f}", std::chrono::duration<double>(serialize_time_char).count());
+    
+    auto sw_compress_elapsed = sw_compress.elapsed();
+    spdlog::info("Compression finished in {:.3} seconds", sw_compress_elapsed.count());
 }
 
 /**
@@ -410,7 +423,7 @@ void RLZ_CHAR<int_t>::compress(int threads, const std::string& seq_file)
 *
 * File content of the .rlz file
 * (uint64_t byte: size num of pair) (int_t byte: size pos) (int_t byte: size len) (int_t byte: size pos) (int_t byte: size len) ...
-* * @param[in] seq_parse [std::vector<std::tuple<int_t, int_t>>] The parse of the seq <(ref pos,len),(ref pos,len),(ref pos,len)... >
+* @param[in] seq_parse [std::vector<std::tuple<int_t, int_t>>] The parse of the seq <(ref pos,len),(ref pos,len),(ref pos,len)... >
 * @param[in] seq_file [std::string] the sequence file name
 *
 * @return void
@@ -418,6 +431,9 @@ void RLZ_CHAR<int_t>::compress(int threads, const std::string& seq_file)
 template<typename int_t>
 void RLZ_CHAR<int_t>::serialize(const std::vector<std::tuple<int_t, int_t>>& seq_parse, const std::string& seq_file)
 {
+    spdlog::debug("Serializing RLZ parse");
+    spdlog::stopwatch sw_serialize;
+
     std::ofstream ofs(seq_file + ".rlz", std::ios::binary);
     if (!ofs) {
         spdlog::error("Error opening {}", seq_file + ".rlz");
@@ -431,6 +447,9 @@ void RLZ_CHAR<int_t>::serialize(const std::vector<std::tuple<int_t, int_t>>& seq
         ofs.write(reinterpret_cast<const char*>(&std::get<1>(seq_parse[i])), sizeof(int_t));
     }
     ofs.close();
+
+    auto sw_serialize_elapsed = sw_serialize.elapsed();
+    spdlog::debug("Serializing finished in {:.6f} seconds", sw_serialize_elapsed.count());
 }
 
 
@@ -439,13 +458,16 @@ void RLZ_CHAR<int_t>::serialize(const std::vector<std::tuple<int_t, int_t>>& seq
 *
 * Decompress seq_file_name.rlz into tuple vector <(ref pos,len),(ref pos,len),(ref pos,len)... > . 
 * Return the vector.
-* * @param[in] parse_file [const std::string&] The parse filename (with .rlz extension)
+* @param[in] parse_file [const std::string&] The parse filename (with .rlz extension)
 *
 * @return Return the vector.
 */
 template<typename int_t>
 std::vector<std::tuple<int_t, int_t>> RLZ_CHAR<int_t>::deserialize(const std::string& parse_file)
 {
+    spdlog::debug("Deserializing RLZ parse");
+    spdlog::stopwatch sw_deserialize;
+
     std::ifstream ifs(parse_file, std::ios::binary);
     if (!ifs) {
         spdlog::error("Error opening {}", parse_file);
@@ -472,6 +494,9 @@ std::vector<std::tuple<int_t, int_t>> RLZ_CHAR<int_t>::deserialize(const std::st
     }
     ifs.close();
 
+    auto sw_deserialize_elapsed = sw_deserialize.elapsed();
+    spdlog::debug("Deserializing finished in {:.6f} seconds", sw_deserialize_elapsed.count());
+
     return seq_parse;
 }
 
@@ -488,6 +513,8 @@ std::vector<std::tuple<int_t, int_t>> RLZ_CHAR<int_t>::deserialize(const std::st
 template<typename int_t>
 void RLZ_CHAR<int_t>::decompress(const std::string& parse_file)
 {
+    spdlog::stopwatch sw_decompress;
+
     std::vector<std::tuple<int_t, int_t>> seq_parse = deserialize(parse_file);
     
     size_t char_size = 0;
@@ -495,7 +522,7 @@ void RLZ_CHAR<int_t>::decompress(const std::string& parse_file)
         char_size += len;
     }
 
-    spdlog::debug("The compessed sequence file had {} chars", char_size);
+    spdlog::debug("The compressed sequence file encodes for {} chars", char_size);
 
     // Resize the array to be equal to the number of bits to be stored
     std::string seq_content;
@@ -525,6 +552,9 @@ void RLZ_CHAR<int_t>::decompress(const std::string& parse_file)
 
     output_file << seq_content;
     output_file.close();
+
+    auto sw_decompress_elapsed = sw_decompress.elapsed();
+    spdlog::info("Decompression finished in {:.3} seconds", sw_decompress_elapsed.count());
 }
 
 
