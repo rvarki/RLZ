@@ -12,6 +12,7 @@
 #include "spdlog/stopwatch.h"
 #include <cstdint>
 #include <filesystem> // Note that this requires at least gcc 9
+#include <limits>
 
 template <typename int_t>
 void run_bit_decompression(const std::string& ref_file, const std::string& parse_file)
@@ -37,7 +38,7 @@ void run_bit_decompression(const std::string& ref_file, const std::string& parse
 }
 
 template <typename int_t>
-void run_bit_compression(const std::string& ref_file, const std::string& seq_file, int threads, int max_len)
+void run_bit_compression(const std::string& ref_file, const std::string& seq_file, int threads, size_t max_len)
 {
     spdlog::debug("Starting to compress the sequence file");
     spdlog::stopwatch sw;
@@ -97,7 +98,7 @@ void run_char_decompression(const std::string& ref_file, const std::string& pars
 }
 
 template <typename int_t>
-void run_char_compression(const std::string& ref_file, const std::string& seq_file, int threads, int max_len)
+void run_char_compression(const std::string& ref_file, const std::string& seq_file, int threads, size_t max_len)
 {
     spdlog::debug("Starting to compress the sequence file");
     spdlog::stopwatch sw;
@@ -144,8 +145,8 @@ int main(int argc, char **argv)
     int verbosity = 0;
     bool clean = false;
     bool bit = false;
-    uint64_t max_len = 0; // 0 means not set
     int threads = 1;
+    size_t max_len = 0; // 0 means not set
     std::string version = "Version: 1.0.0";
     
     // Compress Subcommand
@@ -153,7 +154,7 @@ int main(int argc, char **argv)
     compress_cmd->add_option("-r,--ref", ref_file, "Reference file")->required();
     compress_cmd->add_option("-s,--seq", seq_file, "Sequence file to compress")->required();
     compress_cmd->add_option("-t,--threads", threads, "Number of threads to use")->default_val(1);
-    compress_cmd->add_option("-l, --len", max_len, "Maximum length a match can span")->check(CLI::Range(1UL, UINT64_MAX));
+    compress_cmd->add_option("-l, --len", max_len, "Maximum length a match can span")->check(CLI::Range(static_cast<size_t>(1), std::numeric_limits<size_t>::max()));
     compress_cmd->add_flag("--bit", bit, "Experimental: Set if ref lacks unique sequence chars");
     compress_cmd->add_option("-v,--verbosity", verbosity, "Set verbosity level (0 = info, 1 = debug, 2 = trace)")->check(CLI::Range(0, 2))->default_val(0);   
 

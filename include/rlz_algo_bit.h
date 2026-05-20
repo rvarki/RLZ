@@ -221,7 +221,7 @@ void RLZ_BIT<int_t>::parse(const rlz_fm_index_t& fm_index,
         size_t loop_iter,
         size_t num_threads)
 {
-    int_t pattern_len = 0;
+    size_t pattern_len = 0;
     size_t prev_left = 0;
     size_t prev_right = fm_index.bwt.size();
     size_t next_left = 0;
@@ -277,9 +277,9 @@ void RLZ_BIT<int_t>::parse(const rlz_fm_index_t& fm_index,
             if (next_left == next_right){
                 pattern_len--; // -1 due to not matching the last character successfully
                 auto sa_start = std::chrono::high_resolution_clock::now();
-                int_t sa_pos = fm_support.get_suffix_array_value(fm_index, prev_left);
-                int_t mirrored_sa_pos = fm_index.bwt.size() - 1 - sa_pos; // 0 based involution formula of sa position to correct for the reverse string matching (will give pos in ref where pattern ends)
-                int_t adjusted_sa_pos = mirrored_sa_pos - pattern_len; // adjust the position to where pattern starts
+                size_t sa_pos = fm_support.get_suffix_array_value(fm_index, prev_left);
+                size_t mirrored_sa_pos = fm_index.bwt.size() - 1 - sa_pos; // 0 based involution formula of sa position to correct for the reverse string matching (will give pos in ref where pattern ends)
+                size_t adjusted_sa_pos = mirrored_sa_pos - pattern_len; // adjust the position to where pattern starts
                 auto sa_end = std::chrono::high_resolution_clock::now();
                 sa_time += sa_end - sa_start;
                 seq_parse_vec_vec[loop_iter].emplace_back(std::make_tuple(adjusted_sa_pos, pattern_len));
@@ -294,9 +294,9 @@ void RLZ_BIT<int_t>::parse(const rlz_fm_index_t& fm_index,
             else if (i == 7 && count == num_char_to_process || i == 7 && sfile.peek() == EOF)
             {
                 auto sa_start = std::chrono::high_resolution_clock::now();
-                int_t sa_pos = fm_support.get_suffix_array_value(fm_index, next_left);
-                int_t mirrored_sa_pos = fm_index.bwt.size() - 1 - sa_pos;
-                int_t adjusted_sa_pos = mirrored_sa_pos - pattern_len;
+                size_t sa_pos = fm_support.get_suffix_array_value(fm_index, next_left);
+                size_t mirrored_sa_pos = fm_index.bwt.size() - 1 - sa_pos;
+                size_t adjusted_sa_pos = mirrored_sa_pos - pattern_len;
                 auto sa_end = std::chrono::high_resolution_clock::now();
                 sa_time += sa_end - sa_start;
                 seq_parse_vec_vec[loop_iter].emplace_back(std::make_tuple(adjusted_sa_pos, pattern_len));
@@ -434,7 +434,7 @@ void RLZ_BIT<int_t>::compress(int threads, const std::string& seq_file)
 * We serialize the parse vector into binary file called seq_file_name.rlz
 *
 * File content of the .rlz file
-* (int_t byte size num of pair) (int_t byte size pos) (int_t byte size len) (int_t byte size pos) (int_t byte size len) ...
+* (uint64_t byte size num of pair) (int_t byte size pos) (int_t byte size len) (int_t byte size pos) (int_t byte size len) ...
 * @param[in] seq_parse [std::vector<std::tuple<int_t, int_t>>] The parse of the seq <(binary ref pos,len),(binary ref pos,len),(binary ref pos,len)... >
 * @param[in] seq_file [std::string] the sequence file name
 *
@@ -448,8 +448,8 @@ void RLZ_BIT<int_t>::serialize(const std::vector<std::tuple<int_t, int_t>>& seq_
         spdlog::error("Error opening {}", seq_file + ".rlz");
         std::exit(EXIT_FAILURE);
     }
-    int_t size = seq_parse.size();
-    ofs.write(reinterpret_cast<const char*>(&size), sizeof(int_t));
+    uint64_t size = seq_parse.size();
+    ofs.write(reinterpret_cast<const char*>(&size), sizeof(uint64_t));
     for (size_t i = 0; i < size; i++)
     {
         ofs.write(reinterpret_cast<const char*>(&std::get<0>(seq_parse[i])), sizeof(int_t));
@@ -477,10 +477,10 @@ std::vector<std::tuple<int_t, int_t>> RLZ_BIT<int_t>::deserialize(const std::str
         spdlog::error("Error opening {}", parse_file);
         std::exit(EXIT_FAILURE);
     }
-    int_t size;
+    uint64_t size;
     std::vector<std::tuple<int_t, int_t>> seq_parse;
 
-    ifs.read(reinterpret_cast<char*>(&size), sizeof(int_t));
+    ifs.read(reinterpret_cast<char*>(&size), sizeof(uint64_t));
     seq_parse.reserve(size);
     std::tuple<int_t, int_t> elem;
     int_t val;
