@@ -231,7 +231,7 @@ int main(int argc, char **argv)
                 upper_bound = std::filesystem::file_size(ref_file); // bytes
             }
 
-            if (upper_bound <= UINT8_MAX) { spdlog::info("Encoding entries with uint8_t"); run_bit_compression<uint8_t>(ref_file, seq_file, threads, max_len); }
+            if (upper_bound <= UINT8_MAX) { spdlog::info("Encoding entries with uint8_t"); run_char_compression<uint8_t>(ref_file, seq_file, threads, max_len); }
             else if (upper_bound <= UINT16_MAX) { spdlog::info("Encoding entries with uint16_t"); run_char_compression<uint16_t>(ref_file, seq_file, threads, max_len); }
             else if (upper_bound <= UINT32_MAX) { spdlog::info("Encoding entries with uint32_t"); run_char_compression<uint32_t>(ref_file, seq_file, threads, max_len); }
             else if (upper_bound <= UINT64_MAX) { spdlog::info("Encoding entries with uint64_t"); run_char_compression<uint64_t>(ref_file, seq_file, threads, max_len); }
