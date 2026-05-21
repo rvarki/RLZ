@@ -95,6 +95,7 @@ int main(int argc, char **argv)
     bool bit = false;
     int threads = 1;
     size_t max_len = 0; // 0 means not set
+    bool rlz_repair = false;
     std::string version = "Version: 1.0.0";
     
     // Compress Subcommand
@@ -104,6 +105,7 @@ int main(int argc, char **argv)
     compress_cmd->add_option("-t,--threads", threads, "Number of threads to use")->default_val(1);
     compress_cmd->add_option("-l, --len", max_len, "Maximum length a match can span")->check(CLI::Range(static_cast<size_t>(1), std::numeric_limits<size_t>::max()));
     compress_cmd->add_flag("--bit", bit, "Experimental: Set if ref lacks unique sequence chars");
+    compress_cmd->add_flag("--repair", rlz_repair, "Set if running RLZ-RePair");
     compress_cmd->add_option("-v,--verbosity", verbosity, "Set verbosity level (0 = info, 1 = debug, 2 = trace)")->check(CLI::Range(0, 2))->default_val(0);   
 
     // Decompress Subcommand
@@ -112,6 +114,7 @@ int main(int argc, char **argv)
     decompress_cmd->add_option("-p,--parse", parse_file, "RLZ parse file to decompress")->required();
     decompress_cmd->add_option("-l, --len", max_len, "Maximum length a match can span (must be specified if used for compression)")->check(CLI::Range(1UL, UINT64_MAX));
     decompress_cmd->add_flag("--bit", bit, "Experimental: Set if ref lacks unique sequence chars (must be specified if used for compression)");
+    decompress_cmd->add_flag("--repair", rlz_repair, "Set if running RLZ-RePair");
     decompress_cmd->add_option("-v,--verbosity", verbosity, "Set verbosity level (0 = info, 1 = debug, 2 = trace)")->check(CLI::Range(0, 2))->default_val(0);   
 
     // Choose between compression or decompression subcommand
@@ -149,6 +152,19 @@ int main(int argc, char **argv)
             uintmax_t ref_size = std::filesystem::file_size(ref_file); // bytes
             uintmax_t ref_size_bits = ref_size * 8;
             
+            // Solely for RLZ-RePair which should actually takes entries as int
+            if (rlz_repair){
+                if (ref_size_bits < std::numeric_limits<int>::max()){
+                    spdlog::info("Encoding entries with int");
+                    run_bit_compression<int>(ref_file, seq_file, threads, max_len * 8);
+                }
+                else{
+                    spdlog::error("Determined reference size is too large! Choose a smaller reference file.");
+                    exit(1);
+                }
+                return 0;
+            }
+
             if (ref_size_bits <= UINT8_MAX) { spdlog::info("Encoding entries with uint8_t"); run_bit_compression<uint8_t>(ref_file, seq_file, threads, max_len * 8); }
             else if (ref_size_bits <= UINT16_MAX) { spdlog::info("Encoding entries with uint16_t"); run_bit_compression<uint16_t>(ref_file, seq_file, threads, max_len * 8); }
             else if (ref_size_bits <= UINT32_MAX) { spdlog::info("Encoding entries with uint32_t"); run_bit_compression<uint32_t>(ref_file, seq_file, threads, max_len * 8); }
@@ -166,6 +182,19 @@ int main(int argc, char **argv)
             // Cannot use max len to determine size because position of match can be anywhere on the reference
             spdlog::info("Using the reference size to determine entry size");
             uintmax_t ref_size = std::filesystem::file_size(ref_file); // bytes
+
+            // Solely for RLZ-RePair which should actually takes entries as int
+            if (rlz_repair){
+                if (ref_size < std::numeric_limits<int>::max()){
+                    spdlog::info("Encoding entries with int");
+                    run_char_compression<int>(ref_file, seq_file, threads, max_len);
+                }
+                else{
+                    spdlog::error("Determined reference size is too large! Choose a smaller reference file.");
+                    exit(1);
+                }
+                return 0;
+            }
             
             if (ref_size <= UINT8_MAX) { spdlog::info("Encoding entries with uint8_t"); run_char_compression<uint8_t>(ref_file, seq_file, threads, max_len); }
             else if (ref_size <= UINT16_MAX) { spdlog::info("Encoding entries with uint16_t"); run_char_compression<uint16_t>(ref_file, seq_file, threads, max_len); }
@@ -189,6 +218,19 @@ int main(int argc, char **argv)
             uintmax_t ref_size = std::filesystem::file_size(ref_file); // bytes
             uintmax_t ref_size_bits = ref_size * 8;
             
+            // Solely for RLZ-RePair which should actually takes entries as int
+            if (rlz_repair){
+                if (ref_size_bits < std::numeric_limits<int>::max()){
+                    spdlog::info("Encoding entries with int");
+                    run_bit_decompression<int>(ref_file, parse_file);
+                }
+                else{
+                    spdlog::error("Determined reference size is too large! Choose a smaller reference file.");
+                    exit(1);
+                }
+                return 0;
+            }
+
             // Entries are decoded dynamically by upper bound specified
             if (ref_size_bits <= UINT8_MAX) { spdlog::info("Assuming entries were encoded with uint8_t"); run_bit_decompression<uint8_t>(ref_file, parse_file); }
             else if (ref_size_bits <= UINT16_MAX) { spdlog::info("Assuming entries were encoded with uint16_t"); run_bit_decompression<uint16_t>(ref_file, parse_file); }
@@ -208,6 +250,19 @@ int main(int argc, char **argv)
             spdlog::info("Using the reference size to determine entry size");
             uintmax_t ref_size = std::filesystem::file_size(ref_file); // bytes
             
+            // Solely for RLZ-RePair which should actually takes entries as int
+            if (rlz_repair){
+                if (ref_size < std::numeric_limits<int>::max()){
+                    spdlog::info("Encoding entries with int");
+                    run_char_decompression<int>(ref_file, parse_file);
+                }
+                else{
+                    spdlog::error("Determined reference size is too large! Choose a smaller reference file.");
+                    exit(1);
+                }
+                return 0;
+            }
+
             // Entries are decoded dynamically by upper bound specified
             if (ref_size <= UINT8_MAX) { spdlog::info("Assuming entries were encoded with uint8_t"); run_char_decompression<uint8_t>(ref_file, parse_file); }
             else if (ref_size <= UINT16_MAX) { spdlog::info("Assuming entries were encoded with uint16_t"); run_char_decompression<uint16_t>(ref_file, parse_file); }
