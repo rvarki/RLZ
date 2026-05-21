@@ -43,7 +43,7 @@ class RLZ_BIT {
         RLZ_BIT(const std::string ref_file);
         ~RLZ_BIT();
 
-        void compress(int threads, const std::string& seq_file);
+        void compress(const std::string& seq_file, int threads, size_t max_len);
 
         void parse(const rlz_fm_index_t& fm_index,
             FM_Wrapper& fm_support,
@@ -52,7 +52,8 @@ class RLZ_BIT {
             std::vector<std::vector<std::tuple<int_t, int_t>>>& seq_parse_vec_vec,
             size_t num_bits_to_process,
             size_t loop_iter,
-            size_t num_threads);
+            size_t num_threads,
+            size_t max_len);
 
         void decompress(const std::string& parse_file);
         void load_reference_bit(const std::string& ref_file, sdsl::bit_vector& ref_bit_array);
@@ -222,6 +223,7 @@ void RLZ_BIT<int_t>::load_reverse_reference_bit(const std::string& ref_file, sds
 * @param [in] num_bits_to_process [size_t] the number of bits that should be processed. Useful for the OpenMP parallelization.
 * @param [in] loop_iter [size_t] the loop iteration. Useful for OpenMP and making sure we are thread-safe.
 * @param [in] num_threads [size_t] the total number of threads allocated.
+* @param [in] max_len [size_t] the maximum length of the match
 *
 * @return void
 */
@@ -233,7 +235,8 @@ void RLZ_BIT<int_t>::parse(const rlz_fm_index_t& fm_index,
         std::vector<std::vector<std::tuple<int_t, int_t>>>& seq_parse_vec_vec,
         size_t num_char_to_process,
         size_t loop_iter,
-        size_t num_threads)
+        size_t num_threads,
+        size_t max_len)
 {
     size_t pattern_len = 0;
     size_t prev_left = 0;
@@ -376,8 +379,9 @@ void RLZ_BIT<int_t>::calculate_occs(std::string& ref_content, std::vector<size_t
 * restart the match at the last mismatch position. The parse is ultimately
 * stored in a vector in the correct order. The parse at the end is serialized to a file.
 *
-* @param [in] threads [int] The number of threads provided by the user.
 * @param [in] seq_file [const std::string&] The sequence file to compress
+* @param [in] threads [int] The number of threads provided by the user.
+* @param [in] max_len [size_t] The maximum length of the match 
 *
 * @return void
 *
@@ -389,7 +393,7 @@ void RLZ_BIT<int_t>::calculate_occs(std::string& ref_content, std::vector<size_t
 *
 */
 template<typename int_t>
-void RLZ_BIT<int_t>::compress(int threads, const std::string& seq_file)
+void RLZ_BIT<int_t>::compress(const std::string& seq_file, int threads, size_t max_len)
 {
 
     spdlog::stopwatch sw_compress;
@@ -438,7 +442,7 @@ void RLZ_BIT<int_t>::compress(int threads, const std::string& seq_file)
     #pragma omp parallel for schedule(static)
     for (size_t i = 0; i < threads; i++)
     {
-        parse(fm_index, fm_support, occs, seq_file, seq_parse_vec_vec, num_char_to_process, i, threads);
+        parse(fm_index, fm_support, occs, seq_file, seq_parse_vec_vec, num_char_to_process, i, threads, max_len);
     }
 
     spdlog::debug("Total time spent processing occurrences (s): {:.6f}", std::chrono::duration<double>(backward_match_time).count());

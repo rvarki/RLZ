@@ -33,7 +33,7 @@ void run_bit_compression(const std::string& ref_file, const std::string& seq_fil
 
     RLZ_BIT<int_t> main_parser(ref_file);
     main_parser.load_reverse_reference_bit(ref_file, main_parser.ref_bit_array);
-    main_parser.compress(threads, seq_file);
+    main_parser.compress(seq_file, threads, max_len);
     
     spdlog::info("#############################################################");
     spdlog::info("File Size Statistics:");
@@ -67,7 +67,7 @@ void run_char_compression(const std::string& ref_file, const std::string& seq_fi
     
     RLZ_CHAR<int_t> main_parser(ref_file);
     main_parser.load_reverse_reference(ref_file, main_parser.ref_content);
-    main_parser.compress(threads, seq_file);
+    main_parser.compress(seq_file, threads, max_len);
 
     spdlog::info("#############################################################");
     spdlog::info("File Size Statistics:");
