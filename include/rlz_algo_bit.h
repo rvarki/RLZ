@@ -332,6 +332,29 @@ void RLZ_BIT<int_t>::parse(const rlz_fm_index_t& fm_index,
                 spdlog::trace("END: Putting ({},{}) at end of vector", adjusted_sa_pos, pattern_len);
                 seq_parse_vec_vec[loop_iter].emplace_back(std::make_tuple(adjusted_sa_pos, pattern_len));
             }
+            // If a match has reached the user-defined max len
+            else if (max_len > 0 && pattern_len == max_len)
+            {
+                auto sa_start = std::chrono::high_resolution_clock::now();
+                size_t sa_pos = fm_support.get_suffix_array_value(fm_index, next_left);
+                // spdlog::trace("Reversed SA pos: {}", sa_pos);
+                size_t mirrored_sa_pos = fm_index.bwt.size() - 1 - sa_pos;
+                // spdlog::trace("Forward SA pos: {}", mirrored_sa_pos);
+                // Note: Normally would subtract pattern_len - 1 from mirrored position since mirrored position is match of len 1.
+                // However, $ is added to the end of the reversed text which means it appears at the front of the original text. 
+                // This $ is purely virtual, so it creates a 1 offset for all matches which we account for by subtracting pattern_len
+                size_t adjusted_sa_pos = mirrored_sa_pos - pattern_len;
+                // spdlog::trace("Adjusted SA pos: {}", adjusted_sa_pos);
+                auto sa_end = std::chrono::high_resolution_clock::now();
+                sa_time += sa_end - sa_start;
+                spdlog::trace("Max Len: Putting ({},{}) at end of vector", adjusted_sa_pos, pattern_len);
+                seq_parse_vec_vec[loop_iter].emplace_back(std::make_tuple(adjusted_sa_pos, pattern_len));
+                prev_left = 0;
+                prev_right = fm_index.bwt.size();
+                next_left = 0;
+                next_right = fm_index.bwt.size();
+                pattern_len = 0;
+            }
             // Currently in a perfect match
             else{
                 prev_left = next_left;

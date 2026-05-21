@@ -143,24 +143,18 @@ int main(int argc, char **argv)
         if (bit)
         {
             spdlog::info("Bit alphabet compression enabled");
-            uintmax_t upper_bound_bits = 0;
 
-            // Determine size of parse entries
-            if (max_len > 0) {
-                spdlog::info("Using the specified match-length constraint to determine entry size");
-                upper_bound_bits = max_len * 8;
-            } else {
-                spdlog::info("Using the reference size constraint to determine entry size");
-                uintmax_t ref_size = std::filesystem::file_size(ref_file); // bytes
-                upper_bound_bits = ref_size * 8;
-            }
-
-            if (upper_bound_bits <= UINT8_MAX) { spdlog::info("Encoding entries with uint8_t"); run_bit_compression<uint8_t>(ref_file, seq_file, threads, max_len * 8); }
-            else if (upper_bound_bits <= UINT16_MAX) { spdlog::info("Encoding entries with uint16_t"); run_bit_compression<uint16_t>(ref_file, seq_file, threads, max_len * 8); }
-            else if (upper_bound_bits <= UINT32_MAX) { spdlog::info("Encoding entries with uint32_t"); run_bit_compression<uint32_t>(ref_file, seq_file, threads, max_len * 8); }
-            else if (upper_bound_bits <= UINT64_MAX) { spdlog::info("Encoding entries with uint64_t"); run_bit_compression<uint64_t>(ref_file, seq_file, threads, max_len * 8); }
+            // Cannot use max len to determine size because position of match can be anywhere on the reference 
+            spdlog::info("Using the reference size to determine entry size");
+            uintmax_t ref_size = std::filesystem::file_size(ref_file); // bytes
+            uintmax_t ref_size_bits = ref_size * 8;
+            
+            if (ref_size_bits <= UINT8_MAX) { spdlog::info("Encoding entries with uint8_t"); run_bit_compression<uint8_t>(ref_file, seq_file, threads, max_len * 8); }
+            else if (ref_size_bits <= UINT16_MAX) { spdlog::info("Encoding entries with uint16_t"); run_bit_compression<uint16_t>(ref_file, seq_file, threads, max_len * 8); }
+            else if (ref_size_bits <= UINT32_MAX) { spdlog::info("Encoding entries with uint32_t"); run_bit_compression<uint32_t>(ref_file, seq_file, threads, max_len * 8); }
+            else if (ref_size_bits <= UINT64_MAX) { spdlog::info("Encoding entries with uint64_t"); run_bit_compression<uint64_t>(ref_file, seq_file, threads, max_len * 8); }
             else{
-                spdlog::error("Determined size is too large! Check your reference file or maximum match length parameter.");
+                spdlog::error("Determined reference size is too large! Choose a smaller reference file.");
                 exit(1);
             }
         }
@@ -168,23 +162,17 @@ int main(int argc, char **argv)
         else
         {
             spdlog::info("Original alphabet compression enabled");
-            uintmax_t upper_bound = 0;
 
-            // Determine size of parse entries
-            if (max_len > 0) {
-                spdlog::info("Using the specified match-length constraint to determine entry size");
-                upper_bound = max_len;
-            } else {
-                spdlog::info("Using the reference size constraint to determine entry size");
-                upper_bound = std::filesystem::file_size(ref_file); // bytes
-            }
-
-            if (upper_bound <= UINT8_MAX) { spdlog::info("Encoding entries with uint8_t"); run_char_compression<uint8_t>(ref_file, seq_file, threads, max_len); }
-            else if (upper_bound <= UINT16_MAX) { spdlog::info("Encoding entries with uint16_t"); run_char_compression<uint16_t>(ref_file, seq_file, threads, max_len); }
-            else if (upper_bound <= UINT32_MAX) { spdlog::info("Encoding entries with uint32_t"); run_char_compression<uint32_t>(ref_file, seq_file, threads, max_len); }
-            else if (upper_bound <= UINT64_MAX) { spdlog::info("Encoding entries with uint64_t"); run_char_compression<uint64_t>(ref_file, seq_file, threads, max_len); }
+            // Cannot use max len to determine size because position of match can be anywhere on the reference
+            spdlog::info("Using the reference size to determine entry size");
+            uintmax_t ref_size = std::filesystem::file_size(ref_file); // bytes
+            
+            if (ref_size <= UINT8_MAX) { spdlog::info("Encoding entries with uint8_t"); run_char_compression<uint8_t>(ref_file, seq_file, threads, max_len); }
+            else if (ref_size <= UINT16_MAX) { spdlog::info("Encoding entries with uint16_t"); run_char_compression<uint16_t>(ref_file, seq_file, threads, max_len); }
+            else if (ref_size <= UINT32_MAX) { spdlog::info("Encoding entries with uint32_t"); run_char_compression<uint32_t>(ref_file, seq_file, threads, max_len); }
+            else if (ref_size <= UINT64_MAX) { spdlog::info("Encoding entries with uint64_t"); run_char_compression<uint64_t>(ref_file, seq_file, threads, max_len); }
             else{
-                spdlog::error("Determined size is too large! Check your reference file or maximum match length parameter.");
+                spdlog::error("Determined reference size is too large! Choose a smaller reference file.");
                 exit(1);
             }
         }
@@ -195,25 +183,19 @@ int main(int argc, char **argv)
         if (bit)
         {
             spdlog::info("Bit alphabet decompression enabled");
-            uintmax_t upper_bound_bits = 0;
-
-            // Determine size of parse entries
-            if (max_len > 0) {
-                spdlog::info("Using the specified match-length constraint to determine entry size");
-                upper_bound_bits = max_len * 8;
-            } else {
-                spdlog::info("Using the reference size constraint to determine entry size");
-                uintmax_t ref_size = std::filesystem::file_size(ref_file); // bytes
-                upper_bound_bits = ref_size * 8;
-            }
-
+            
+            // Cannot use max len to determine size because position of match can be anywhere on the reference
+            spdlog::info("Using the reference size to determine entry size");
+            uintmax_t ref_size = std::filesystem::file_size(ref_file); // bytes
+            uintmax_t ref_size_bits = ref_size * 8;
+            
             // Entries are decoded dynamically by upper bound specified
-            if (upper_bound_bits <= UINT8_MAX) { spdlog::info("Assuming entries were encoded with uint8_t"); run_bit_decompression<uint8_t>(ref_file, parse_file); }
-            else if (upper_bound_bits <= UINT16_MAX) { spdlog::info("Assuming entries were encoded with uint16_t"); run_bit_decompression<uint16_t>(ref_file, parse_file); }
-            else if (upper_bound_bits <= UINT32_MAX) { spdlog::info("Assuming entries were encoded with uint32_t"); run_bit_decompression<uint32_t>(ref_file, parse_file); }
-            else if (upper_bound_bits <= UINT64_MAX) { spdlog::info("Assuming entries were encoded with uint64_t"); run_bit_decompression<uint64_t>(ref_file, parse_file); }
+            if (ref_size_bits <= UINT8_MAX) { spdlog::info("Assuming entries were encoded with uint8_t"); run_bit_decompression<uint8_t>(ref_file, parse_file); }
+            else if (ref_size_bits <= UINT16_MAX) { spdlog::info("Assuming entries were encoded with uint16_t"); run_bit_decompression<uint16_t>(ref_file, parse_file); }
+            else if (ref_size_bits <= UINT32_MAX) { spdlog::info("Assuming entries were encoded with uint32_t"); run_bit_decompression<uint32_t>(ref_file, parse_file); }
+            else if (ref_size_bits <= UINT64_MAX) { spdlog::info("Assuming entries were encoded with uint64_t"); run_bit_decompression<uint64_t>(ref_file, parse_file); }
             else{
-                spdlog::error("Determined size is too large! Check your reference file or maximum match length parameter.");
+                spdlog::error("Determined reference size is too large! Choose a smaller reference file.");
                 exit(1);
             }
         }
@@ -221,24 +203,18 @@ int main(int argc, char **argv)
         else
         {
             spdlog::info("Original alphabet decompression enabled");
-            uintmax_t upper_bound = 0;
 
-            // Determine size of parse entries
-            if (max_len > 0) {
-                spdlog::info("Using the specified match-length constraint to determine entry size");
-                upper_bound = max_len;
-            } else {
-                spdlog::info("Using the reference size constraint to determine entry size");
-                upper_bound = std::filesystem::file_size(ref_file); // bytes
-            }
-
+            // Cannot use max len to determine size because position of match can be anywhere on the reference
+            spdlog::info("Using the reference size to determine entry size");
+            uintmax_t ref_size = std::filesystem::file_size(ref_file); // bytes
+            
             // Entries are decoded dynamically by upper bound specified
-            if (upper_bound <= UINT8_MAX) { spdlog::info("Assuming entries were encoded with uint8_t"); run_char_decompression<uint8_t>(ref_file, parse_file); }
-            else if (upper_bound <= UINT16_MAX) { spdlog::info("Assuming entries were encoded with uint16_t"); run_char_decompression<uint16_t>(ref_file, parse_file); }
-            else if (upper_bound <= UINT32_MAX) { spdlog::info("Assuming entries were encoded with uint32_t"); run_char_decompression<uint32_t>(ref_file, parse_file); }
-            else if (upper_bound <= UINT64_MAX) { spdlog::info("Assuming entries were encoded with uint64_t"); run_char_decompression<uint64_t>(ref_file, parse_file); }
+            if (ref_size <= UINT8_MAX) { spdlog::info("Assuming entries were encoded with uint8_t"); run_char_decompression<uint8_t>(ref_file, parse_file); }
+            else if (ref_size <= UINT16_MAX) { spdlog::info("Assuming entries were encoded with uint16_t"); run_char_decompression<uint16_t>(ref_file, parse_file); }
+            else if (ref_size <= UINT32_MAX) { spdlog::info("Assuming entries were encoded with uint32_t"); run_char_decompression<uint32_t>(ref_file, parse_file); }
+            else if (ref_size <= UINT64_MAX) { spdlog::info("Assuming entries were encoded with uint64_t"); run_char_decompression<uint64_t>(ref_file, parse_file); }
             else{
-                spdlog::error("Determined size is too large! Check your reference file or maximum match length parameter.");
+                spdlog::error("Determined reference size is too large! Choose a smaller reference file.");
                 exit(1);
             }
         }
