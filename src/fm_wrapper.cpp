@@ -58,17 +58,24 @@ std::tuple<size_t, size_t> FM_Wrapper::backward_match(const rlz_fm_index_t& fm_i
     std::size_t next_right = fm_index.bwt.rank(std::get<1>(prev_backward_range), next_char);
 
     // There is a special (smaller) character appended so have to add 1 to the offset for both
-    try{ 
-        next_left += occs[static_cast<unsigned char>(next_char)] + 1;
-    } catch (const std::out_of_range& e) {
-        std::cerr << "Character code:" << static_cast<unsigned char>(next_char) << "not found in reference text!" << std::endl;
-        exit(1);
+    unsigned char u_next_char = static_cast<unsigned char>(next_char);
+    try{
+        if (u_next_char < 255 && occs[u_next_char] == occs[u_next_char + 1]) {
+            throw std::runtime_error("Missing character");
+        }
+        next_left += occs[u_next_char] + 1;
+    } catch (const std::runtime_error& e) {
+        std::cerr << "Character code: " << static_cast<int>(u_next_char) << " ('" << next_char << "') not found in reference text!" << std::endl;
+        std::exit(EXIT_FAILURE);
     }
     try{ 
-        next_right += occs[static_cast<unsigned char>(next_char)] + 1;
-    } catch (const std::out_of_range& e) {
-        std::cerr << "Character code:" << static_cast<unsigned char>(next_char) << "not found in reference text!" << std::endl;
-        exit(1);
+        if (u_next_char < 255 && occs[u_next_char] == occs[u_next_char + 1]) {
+            throw std::runtime_error("Missing character");
+        }
+        next_right += occs[u_next_char] + 1;
+    } catch (const std::runtime_error& e) {
+        std::cerr << "Character code: " << static_cast<int>(u_next_char) << " ('" << next_char << "') not found in reference text!" << std::endl;
+        std::exit(EXIT_FAILURE);
     }
     
     return std::make_tuple(next_left,next_right);
