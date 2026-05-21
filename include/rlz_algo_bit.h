@@ -292,10 +292,17 @@ void RLZ_BIT<int_t>::parse(const rlz_fm_index_t& fm_index,
                 pattern_len--; // -1 due to not matching the last character successfully
                 auto sa_start = std::chrono::high_resolution_clock::now();
                 size_t sa_pos = fm_support.get_suffix_array_value(fm_index, prev_left);
+                // spdlog::trace("Reversed SA pos: {}", sa_pos);
                 size_t mirrored_sa_pos = fm_index.bwt.size() - 1 - sa_pos; // 0 based involution formula of sa position to correct for the reverse string matching (will give pos in ref where pattern ends)
-                size_t adjusted_sa_pos = mirrored_sa_pos - pattern_len; // adjust the position to where pattern starts
+                // spdlog::trace("Forward SA pos: {}", mirrored_sa_pos);
+                // Note: Normally would subtract pattern_len - 1 from mirrored position since mirrored position is match of len 1.
+                // However, $ is added to the end of the reversed text which means it appears at the front of the original text. 
+                // This $ is purely virtual, so it creates a 1 offset for all matches which we account for by subtracting pattern_len
+                size_t adjusted_sa_pos = mirrored_sa_pos - pattern_len;
+                // spdlog::trace("Adjusted SA pos: {}", adjusted_sa_pos);
                 auto sa_end = std::chrono::high_resolution_clock::now();
                 sa_time += sa_end - sa_start;
+                spdlog::trace("Mismatch: Putting ({},{}) at end of vector", adjusted_sa_pos, pattern_len);
                 seq_parse_vec_vec[loop_iter].emplace_back(std::make_tuple(adjusted_sa_pos, pattern_len));
                 prev_left = 0;
                 prev_right = fm_index.bwt.size();
@@ -309,10 +316,17 @@ void RLZ_BIT<int_t>::parse(const rlz_fm_index_t& fm_index,
             {
                 auto sa_start = std::chrono::high_resolution_clock::now();
                 size_t sa_pos = fm_support.get_suffix_array_value(fm_index, next_left);
+                // spdlog::trace("Reversed SA pos: {}", sa_pos);
                 size_t mirrored_sa_pos = fm_index.bwt.size() - 1 - sa_pos;
+                // spdlog::trace("Forward SA pos: {}", mirrored_sa_pos);
+                // Note: Normally would subtract pattern_len - 1 from mirrored position since mirrored position is match of len 1.
+                // However, $ is added to the end of the reversed text which means it appears at the front of the original text. 
+                // This $ is purely virtual, so it creates a 1 offset for all matches which we account for by subtracting pattern_len
                 size_t adjusted_sa_pos = mirrored_sa_pos - pattern_len;
+                // spdlog::trace("Adjusted SA pos: {}", adjusted_sa_pos);
                 auto sa_end = std::chrono::high_resolution_clock::now();
                 sa_time += sa_end - sa_start;
+                spdlog::trace("END: Putting ({},{}) at end of vector", adjusted_sa_pos, pattern_len);
                 seq_parse_vec_vec[loop_iter].emplace_back(std::make_tuple(adjusted_sa_pos, pattern_len));
             }
             // Currently in a perfect match
@@ -392,6 +406,7 @@ void RLZ_BIT<int_t>::compress(int threads, const std::string& seq_file)
     spdlog::debug("Building FM-index of reversed reference 'bits'");
     spdlog::stopwatch sw_fm_index;
     construct_im(fm_index, binary_reference_text, 1);
+    assert(binary_reference_text.size() + 1 == fm_index.bwt.size()); // SDSL should add the sentinel to the end
     auto sw_fm_index_elapsed = sw_fm_index.elapsed();
     spdlog::debug("Finished building FM-index in {:.3} seconds", sw_fm_index_elapsed.count());
 
