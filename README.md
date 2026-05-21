@@ -1,5 +1,16 @@
 # Relative Lempel-Ziv (RLZ)
 
+```
+ooooooooo.   ooooo         oooooooooooo 
+`888   `Y88. `888'        d'""""""d888' 
+ 888   .d88'  888               .888P   
+ 888ooo88P'   888              d888'    
+ 888`88b.     888            .888P      
+ 888  `88b.   888       o   d888'    .P 
+o888o  o888o o888ooooood8 .8888888888P  
+                                        v1.1.0
+```
+
 ## Description
 
 This software computes the Relative Lempel Ziv (RLZ) parse of the target sequence file using a reference file. By default, the software does character-level encoding.
