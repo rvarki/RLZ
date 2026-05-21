@@ -17,50 +17,24 @@
 template <typename int_t>
 void run_bit_decompression(const std::string& ref_file, const std::string& parse_file)
 {
-    spdlog::debug("Starting to decompress the compressed sequence file");
-    spdlog::stopwatch sw;
-    spdlog::stopwatch sw_parser;
+    spdlog::info("The reference file provided: {}", ref_file);
+    spdlog::info("The parse file provided: {}", parse_file);
+
     RLZ_BIT<int_t> main_parser(ref_file);
-    auto sw_parser_elapsed = sw_parser.elapsed();
-    spdlog::debug("Built main parser in {:.3} seconds", sw_parser_elapsed.count());
-    spdlog::debug("Starting to store the reference file as a bit vector");
-    spdlog::stopwatch sw_ref;
-    main_parser.load_file_to_bit_vector(ref_file, main_parser.ref_bit_array);
-    auto sw_ref_elapsed = sw_ref.elapsed();
-    spdlog::debug("Loaded file in {:.3} seconds", sw_ref_elapsed.count());
-    spdlog::stopwatch sw_decompress;
+    main_parser.load_reference_bit(ref_file, main_parser.ref_bit_array);
     main_parser.decompress(parse_file);
-    auto sw_decompress_elapsed = sw_decompress.elapsed();
-    auto elapsed = sw.elapsed();
-    spdlog::debug("Decompression function finished in {:.3} seconds", sw_decompress_elapsed.count());
-    spdlog::debug("Finished decompressing the compressed sequence file");
-    spdlog::info("Decompressed in {:.3} seconds", elapsed.count());
 }
 
 template <typename int_t>
 void run_bit_compression(const std::string& ref_file, const std::string& seq_file, int threads, size_t max_len)
 {
-    spdlog::debug("Starting to compress the sequence file");
-    spdlog::stopwatch sw;
     spdlog::debug("The reference file provided: {}", ref_file);
     spdlog::debug("The sequence file provided: {}", seq_file);
-    spdlog::stopwatch sw_parser;
-    // Stream the sequence file
+
     RLZ_BIT<int_t> main_parser(ref_file);
-    auto sw_parser_elapsed = sw_parser.elapsed();
-    spdlog::debug("Built main parser in {:.3} seconds", sw_parser_elapsed.count());
-    spdlog::stopwatch sw_ref;
-    spdlog::debug("Starting to store the reference file as a bit vector");
-    main_parser.load_reverse_file_to_bit_vector(ref_file, main_parser.ref_bit_array);
-    auto sw_ref_elapsed = sw_ref.elapsed();
-    spdlog::debug("Loaded file in {:.3} seconds", sw_ref_elapsed.count());
-    spdlog::stopwatch sw_compress;
+    main_parser.load_reverse_reference_bit(ref_file, main_parser.ref_bit_array);
     main_parser.compress(threads, seq_file);
-    auto sw_compress_elapsed = sw_compress.elapsed();
-    spdlog::debug("Compression function finished in {:.3} seconds", sw_compress_elapsed.count());
-    auto elapsed = sw.elapsed();
-    spdlog::debug("Finished compressing the sequence file");
-    spdlog::info("Compressed in {:.3} seconds", elapsed.count());
+    
     spdlog::info("#############################################################");
     spdlog::info("File Size Statistics:");
     uintmax_t ref_size = std::filesystem::file_size(ref_file); //bytes
