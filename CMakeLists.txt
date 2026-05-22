@@ -135,7 +135,7 @@ add_library(fm_wrapper ${PROJECT_SRC_DIR}/fm_wrapper.cpp)
 target_include_directories(fm_wrapper PUBLIC ${SDSL_SRC} ${DIVSUFSORT_SRC} ${DIVSUFSORT64_SRC} ${PROJECT_INCLUDE_DIR})
 target_link_libraries(fm_wrapper PUBLIC ${SDSL_LIB} ${DIVSUFSORT_LIB} ${DIVSUFSORT64_LIB})
 
-add_executable(rlz rlz.cpp)
+add_executable(rlz ${PROJECT_SRC_DIR}/rlz.cpp)
 target_include_directories(rlz PUBLIC ${PROJECT_INCLUDE_DIR} ${SDSL_SRC} ${THIRDPARTY_INCLUDE_DIR} ${THIRDPARTY_INCLUDE_DIR}/CLI)
 target_link_libraries(rlz PUBLIC ${SDSL_LIB} fm_wrapper)
 
