@@ -38,3 +38,4 @@ build/
 # Output files
 *.rlz
 *.sa
+*.csv
