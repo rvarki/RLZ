@@ -6,12 +6,34 @@
 */
 
 #include <CLI11.hpp>
-
+#include "sort_algo_bit.h"
+#include "sort_algo_char.h"
+#include "sort_algo_text.h"
 #include "spdlog/spdlog.h"
 #include "spdlog/stopwatch.h"
 #include <cstdint>
 #include <filesystem> // Note that this requires at least gcc 9
 #include <limits>
+
+template <typename int_t>
+void run_rlz_bit_sort(const std::string& ref_file, const std::string& parse_file)
+{
+    
+}
+
+template <typename int_t>
+void run_rlz_char_sort(const std::string& ref_file, const std::string& parse_file)
+{
+    
+}
+
+
+void run_text_sort(const std::string& seq_file)
+{
+    
+}
+
+
 
 int main(int argc, char **argv) 
 {
@@ -73,22 +95,72 @@ int main(int argc, char **argv)
     {
         if (bit)
         {
+            spdlog::info("Bit alphabet sorting enabled");
+
+            // Cannot use max len to determine size because position of match can be anywhere on the reference 
+            spdlog::info("Using the reference size to determine entry size");
+            uintmax_t ref_size = std::filesystem::file_size(ref_file); // bytes
+            uintmax_t ref_size_bits = ref_size * 8;
+
+            // Solely for RLZ-RePair which should actually takes entries as int
             if (rlz_repair)
             {
+                if (ref_size_bits < std::numeric_limits<int>::max()){
+                    spdlog::info("Assuming entries encoded with int");
+                    run_rlz_bit_sort<int>(ref_file, parse_file);
+                }
+                else{
+                    spdlog::error("Determined reference size is too large! Choose a smaller reference file.");
+                    exit(1);
+                }
                 return 0;
+            }
+            // Entry size is determined by the size of the reference
+            if (ref_size_bits <= UINT8_MAX) { spdlog::info("Assuming entries were encoded with uint8_t"); run_rlz_bit_sort<uint8_t>(ref_file, parse_file); }
+            else if (ref_size_bits <= UINT16_MAX) { spdlog::info("Assuming entries were encoded with uint16_t"); run_rlz_bit_sort<uint16_t>(ref_file, parse_file); }
+            else if (ref_size_bits <= UINT32_MAX) { spdlog::info("Assuming entries were encoded with uint32_t"); run_rlz_bit_sort<uint32_t>(ref_file, parse_file); }
+            else if (ref_size_bits <= UINT64_MAX) { spdlog::info("Assuming entries were encoded with uint64_t"); run_rlz_bit_sort<uint64_t>(ref_file, parse_file); }
+            else{
+                spdlog::error("Determined reference size is too large! Choose a smaller reference file.");
+                exit(1);
             }
         }
         else
         {
+            spdlog::info("Original alphabet sorting enabled");
+
+            // Cannot use max len to determine size because position of match can be anywhere on the reference
+            spdlog::info("Using the reference size to determine entry size");
+            uintmax_t ref_size = std::filesystem::file_size(ref_file); // bytes
+
+            // Solely for RLZ-RePair which should actually takes entries as int
             if (rlz_repair)
             {
+                if (ref_size < std::numeric_limits<int>::max()){
+                    spdlog::info("Encoding entries with int");
+                    run_rlz_char_sort<int>(ref_file, parse_file);
+                }
+                else{
+                    spdlog::error("Determined reference size is too large! Choose a smaller reference file.");
+                    exit(1);
+                }
                 return 0;
+            }
+            // Entries is determined by the size of the reference
+            if (ref_size <= UINT8_MAX) { spdlog::info("Assuming entries were encoded with uint8_t"); run_rlz_char_sort<uint8_t>(ref_file, parse_file); }
+            else if (ref_size <= UINT16_MAX) { spdlog::info("Assuming entries were encoded with uint16_t"); run_rlz_char_sort<uint16_t>(ref_file, parse_file); }
+            else if (ref_size <= UINT32_MAX) { spdlog::info("Assuming entries were encoded with uint32_t"); run_rlz_char_sort<uint32_t>(ref_file, parse_file); }
+            else if (ref_size <= UINT64_MAX) { spdlog::info("Assuming entries were encoded with uint64_t"); run_rlz_char_sort<uint64_t>(ref_file, parse_file); }
+            else{
+                spdlog::error("Determined reference size is too large! Choose a smaller reference file.");
+                exit(1);
             }
         }
     }
     else if (text_cmd->parsed())
     {
-
+        spdlog::info("Text sorting enabled");
+        run_text_sort(seq_file);
     }
     else{ spdlog::error("Neither rlz or text sorting. This condition should be impossible!"); }
 
