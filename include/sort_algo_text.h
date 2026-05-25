@@ -21,7 +21,7 @@ class TEXT_SORT
         TEXT_SORT(const std::string seq_file);
         ~TEXT_SORT();
 
-        bool comparator(std::string_view a, std::string_view b);
+        bool comparator(std::string_view a, std::string_view b, size_t& char_count);
         void buildSuffixArray(bool csv);
         void writeSuffixArray(const std::string seq_file);
 };

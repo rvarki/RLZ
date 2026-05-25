@@ -72,11 +72,25 @@ TEXT_SORT::~TEXT_SORT(){}
  * 
  * @param [in] a [string_view] suffix a
  * @param [in] b [string_view] suffix b
+ * @param [in] char_count [size_t] the number of character comparsions at this timepoint
  * 
  * @return a less than b
  */
 
-bool TEXT_SORT::comparator(std::string_view a, std::string_view b){ return a < b; } 
+bool TEXT_SORT::comparator(std::string_view a, std::string_view b, size_t& char_count)
+{ 
+    size_t min_len = std::min(a.length(), b.length());
+
+    for (size_t i = 0; i < min_len; ++i) {
+        char_count++; 
+        if (a[i] != b[i]) {
+            return a[i] < b[i];
+        }
+    }
+
+    char_count++; 
+    return a.length() < b.length();
+} 
 
 
 /**
@@ -105,12 +119,22 @@ void TEXT_SORT::buildSuffixArray(bool csv)
     // Read only view into original text
     std::string_view view(seq_content);
 
-    // Sort the indices using the custom comparator
+    size_t total_suffix_comparisons = 0;
+    size_t total_char_comparisons = 0;
+
     std::sort(suffix_array.begin(), suffix_array.end(), [&](size_t a, size_t b) {
-        return comparator(view.substr(a), view.substr(b)); // Extract the suffix in O(1) time 
+        total_suffix_comparisons++; 
+        return comparator(view.substr(a), view.substr(b), total_char_comparisons); 
     });
 
     auto sw_sort_elapsed = sw_sort.elapsed();
+
+    double avg_char_per_comparison = static_cast<double>(total_char_comparisons) / static_cast<double>(total_suffix_comparisons);
+
+    spdlog::debug("Total number of suffix comparisons: {}", total_suffix_comparisons);
+    spdlog::debug("Total number of character comparisons: {}", total_char_comparisons);
+    spdlog::debug("Average number of characters compared per suffix comparison: {:.3}", avg_char_per_comparison);
+    
     spdlog::info("Finished sorting suffixes in {:.3} seconds", sw_sort_elapsed.count());
 }
 
@@ -140,5 +164,5 @@ void TEXT_SORT::writeSuffixArray(const std::string seq_file)
     out.close();
 
     auto sw_write_elapsed = sw_write.elapsed();
-    spdlog::info("Finished writing suffix array in {:.3} seconds", sw_write_elapsed.count());
+    spdlog::info("Finished writing suffix array to file in {:.3} seconds", sw_write_elapsed.count());
 }
