@@ -139,8 +139,9 @@ add_executable(rlz ${PROJECT_SRC_DIR}/rlz.cpp)
 target_include_directories(rlz PUBLIC ${PROJECT_INCLUDE_DIR} ${SDSL_SRC} ${THIRDPARTY_INCLUDE_DIR} ${THIRDPARTY_INCLUDE_DIR}/CLI)
 target_link_libraries(rlz PUBLIC ${SDSL_LIB} fm_wrapper)
 
-add_executable(sort ${PROJECT_SRC_DIR}/sort.cpp)
+add_executable(sort ${PROJECT_SRC_DIR}/sort.cpp ${PROJECT_SRC_DIR}/sort_algo_text.cpp)
 target_include_directories(sort PUBLIC ${PROJECT_INCLUDE_DIR} ${SDSL_SRC} ${THIRDPARTY_INCLUDE_DIR} ${THIRDPARTY_INCLUDE_DIR}/CLI)
+target_link_libraries(sort PUBLIC ${SDSL_LIB} ${DIVSUFSORT_LIB} ${DIVSUFSORT64_LIB})
 
 install(TARGETS fm_wrapper TYPE LIBRARY)
 install(TARGETS rlz TYPE RUNTIME)
