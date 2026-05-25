@@ -6,6 +6,7 @@
 */
 
 #include "sort_algo_text.h"
+#include "benchmark_logger.h"
 #include <iostream>
 #include <vector>
 #include <string>
@@ -101,10 +102,11 @@ bool TEXT_SORT::comparator(std::string_view a, std::string_view b, size_t& char_
  * are more efficient manners to create the suffix array, but the purpose is to compare 
  * sorting time with RLZ version, therefore an inefficient but compatible metho with RLZ was chosen.
  * 
+ * @param [in] seq_file [string] The path to the sequence file
  * @param [in] csv [bool] Whether to produce csv containing sort stats
  */
 
-void TEXT_SORT::buildSuffixArray(bool csv) 
+void TEXT_SORT::buildSuffixArray(const std::string seq_file, bool csv) 
 {
     spdlog::stopwatch sw_sort;
 
@@ -129,13 +131,17 @@ void TEXT_SORT::buildSuffixArray(bool csv)
 
     auto sw_sort_elapsed = sw_sort.elapsed();
 
+    double sort_time = static_cast<double>(sw_sort_elapsed.count());
     double avg_char_per_comparison = static_cast<double>(total_char_comparisons) / static_cast<double>(total_suffix_comparisons);
 
     spdlog::debug("Total number of suffix comparisons: {}", total_suffix_comparisons);
     spdlog::debug("Total number of character comparisons: {}", total_char_comparisons);
     spdlog::debug("Average number of characters compared per suffix comparison: {:.3}", avg_char_per_comparison);
-    
-    spdlog::info("Finished sorting suffixes in {:.3} seconds", sw_sort_elapsed.count());
+
+    spdlog::info("Finished sorting suffixes in {:.3} seconds", sort_time);
+
+    // If outputting CSV is requested
+    if (csv) { write_sort_benchmark_csv(seq_file, "Text", n, sort_time, total_suffix_comparisons, total_char_comparisons, avg_char_per_comparison); }
 }
 
 

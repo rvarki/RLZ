@@ -31,7 +31,7 @@ void run_rlz_char_sort(const std::string& ref_file, const std::string& parse_fil
 void run_text_sort(const std::string& seq_file, bool csv)
 {
     TEXT_SORT main_parser(seq_file);
-    main_parser.buildSuffixArray(csv);
+    main_parser.buildSuffixArray(seq_file, csv);
     main_parser.writeSuffixArray(seq_file);
 }
 
