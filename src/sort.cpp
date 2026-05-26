@@ -24,7 +24,9 @@ void run_rlz_bit_sort(const std::string& ref_file, const std::string& parse_file
 template <typename int_t>
 void run_rlz_char_sort(const std::string& ref_file, const std::string& parse_file, bool match_limit, bool csv)
 {
-    
+    RLZ_CHAR_SORT<int_t> main_parser(ref_file, parse_file);
+    main_parser.sort_naive(false);
+    main_parser.stream_sa_to_file(parse_file);
 }
 
 
