@@ -582,9 +582,12 @@ void RLZ_CHAR_SORT<int_t>::sort_induced(bool apply_resync) {
     }
 
     std::sort(complete_bin.begin(), complete_bin.end(), [&](const SortableSuffix& a, const SortableSuffix& b) {
-        int_t rank_a = csa_ref.isa[a.first_factor.p];
-        int_t rank_b = csa_ref.isa[b.first_factor.p];
-        return (rank_a != rank_b) ? (rank_a < rank_b) : compare_suffixes(a, b);
+        if (a.is_ind && b.is_ind) {
+            int_t rank_a = csa_ref.isa[a.first_factor.p];
+            int_t rank_b = csa_ref.isa[b.first_factor.p];
+            if (rank_a != rank_b) return rank_a < rank_b;
+        }
+        return compare_suffixes(a, b);
     });
 
     std::sort(incomplete_bin.begin(), incomplete_bin.end(), [&](const SortableSuffix& a, const SortableSuffix& b) {
