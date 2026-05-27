@@ -485,7 +485,7 @@ std::vector<typename RLZ_CHAR_SORT<int_t>::SortableSuffix> RLZ_CHAR_SORT<int_t>:
                 suf.is_ind = is_indicative(effective_first); // Re-evaluate after extending
             } 
             else {
-                spdlog::trace("Factor ({},{}) is indicative so no resyncing", effective_first.p, effective_first.l); 
+                spdlog::trace("Factor ({},{}) is either indicative or resync not enabled", effective_first.p, effective_first.l); 
                 suf.is_ind = already_ind; 
             }
             
