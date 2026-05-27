@@ -55,7 +55,7 @@ class RLZ_CHAR_SORT
     
     private:
         int_t get_lce(int_t i, int_t j); 
-        bool compare_suffixes(const SortableSuffix& a, const SortableSuffix& b);
+        bool compare_suffixes(const SortableSuffix& a, const SortableSuffix& b, const std::vector<size_t>* factor_ranks = nullptr);
         bool is_indicative(const RLZ_Factor& f);
         std::pair<int_t, int_t> get_sa_range(const RLZ_Factor& f);
         RLZ_Factor apply_resynchronization(const RLZ_Factor& f_i, const RLZ_Factor& f_next);
@@ -175,11 +175,12 @@ int_t RLZ_CHAR_SORT<int_t>::get_lce(int_t i, int_t j) {
  * per factor transition, avoiding decompression and character-by-character scans.
  * @param [in] a [SortableSuffix] The first suffix object.
  * @param [in] b [SortableSuffix] The second suffix object.
+ * @param [in] factor_ranks [std::vector<size_t>*] Optional: The ISA of the sorted complete factors 
  * @return [bool] True if Suffix A is strictly less than Suffix B.
  */
 
 template<typename int_t>
-bool RLZ_CHAR_SORT<int_t>::compare_suffixes(const SortableSuffix& a, const SortableSuffix& b) {
+bool RLZ_CHAR_SORT<int_t>::compare_suffixes(const SortableSuffix& a, const SortableSuffix& b, const std::vector<size_t>* factor_ranks) {
     int_t pa = a.first_factor.p;
     int_t pb = b.first_factor.p;
     int_t la = a.first_factor.l;
@@ -249,6 +250,33 @@ bool RLZ_CHAR_SORT<int_t>::compare_suffixes(const SortableSuffix& a, const Sorta
         } else {
             spdlog::trace("Factor A fully consumed --- Factor B fully consumed");
 
+            // THE O(1) BACKBONE SHORTCUT
+            // If we have access to the sorted ranks, and neither factor has a 
+            // resynchronization debt (skip == 0), we are sitting exactly on the 
+            // boundaries of two complete factors. We can terminate immediately!
+            
+            if (factor_ranks != nullptr && skip_a == 0 && skip_b == 0) {
+                spdlog::trace("Can use complete factor shortcut to finish comparison");
+
+                // Handle end-of-text boundaries
+                if (idx_a >= rlz_factors.size() && idx_b >= rlz_factors.size()) {
+                    spdlog::error("Suffixes A and B have no more factors! Should not be possible.");
+                    return false;
+                }
+                if (idx_a >= rlz_factors.size()) {
+                    spdlog::trace("Suffix A has no more factors"); 
+                    return true;
+                } 
+                if (idx_b >= rlz_factors.size()) {
+                    spdlog::trace("Suffix B has no more factors"); 
+                    return false;
+                }
+                
+                // O(1) instant resolution using the sorted backbone
+                return (*factor_ranks)[idx_a] < (*factor_ranks)[idx_b];
+            }
+
+            // Fallback for suffixes carrying a resync debt
             // Move Suffixes A and B to next factor if possible
             bool a_has_more = fetch_next(idx_a, pa, la, skip_a);
             bool b_has_more = fetch_next(idx_b, pb, lb, skip_b);
@@ -581,6 +609,7 @@ void RLZ_CHAR_SORT<int_t>::sort_induced(bool apply_resync) {
         else incomplete_bin.push_back(suf);
     }
 
+    // Sort the complete factor suffixes first since they are the most likely to be indicative
     std::sort(complete_bin.begin(), complete_bin.end(), [&](const SortableSuffix& a, const SortableSuffix& b) {
         if (a.is_ind && b.is_ind) {
             int_t rank_a = csa_ref.isa[a.first_factor.p];
@@ -590,15 +619,24 @@ void RLZ_CHAR_SORT<int_t>::sort_induced(bool apply_resync) {
         return compare_suffixes(a, b);
     });
 
+    // Build the ISA of the sorted complete factors
+    std::vector<size_t> factor_ranks(rlz_factors.size(), 0);
+    for (size_t r = 0; r < complete_bin.size(); ++r) {
+        factor_ranks[complete_bin[r].id.factor_idx] = r;
+    }
+
+    // Sort the incomplete factors suffixes using the sorted complete factor suffixes knowledge
+    // Note this speedup only occurs if two factors are fully consumed at the same time
     std::sort(incomplete_bin.begin(), incomplete_bin.end(), [&](const SortableSuffix& a, const SortableSuffix& b) {
-        return compare_suffixes(a, b);
+        return compare_suffixes(a, b, &factor_ranks);
     });
 
     sa_T.reserve(all_suffixes.size());
     
+    // Merge the sorted complete and incomplete factors
     size_t i = 0, j = 0;
     while (i < complete_bin.size() && j < incomplete_bin.size()) {
-        if (compare_suffixes(complete_bin[i], incomplete_bin[j])) {
+        if (compare_suffixes(complete_bin[i], incomplete_bin[j], &factor_ranks)) {
             sa_T.push_back(complete_bin[i++].id);
         } else {
             sa_T.push_back(incomplete_bin[j++].id);
