@@ -36,7 +36,8 @@ class RLZ_CHAR_SORT
         // first_factor: The factor after resynchronization or the original factor if option not used
         // is_ind: Whether first_factor is indicative or not
         // borrowed: Tracks characters consumed from subsequent factors during resync
-        struct SortableSuffix { SuffixID id; RLZ_Factor first_factor; bool is_ind; int_t borrowed; };
+        // sa_range: Caches the [start, end] interval
+        struct SortableSuffix { SuffixID id; RLZ_Factor first_factor; bool is_ind; int_t borrowed; std::pair<int_t, int_t> sa_range; };
 
         std::string ref_content;
         sort_csa_index_t csa_ref; 
@@ -519,6 +520,14 @@ std::vector<typename RLZ_CHAR_SORT<int_t>::SortableSuffix> RLZ_CHAR_SORT<int_t>:
             
             suf.first_factor = effective_first;
             suf.borrowed = static_cast<int_t>(effective_first.l - orig_l);
+
+            // Only pay for the RMQ binary search if the factor is NON-indicative
+            if (suf.is_ind) {
+                int_t rank = csa_ref.isa[suf.first_factor.p];
+                suf.sa_range = {rank, rank}; 
+            } else {
+                suf.sa_range = get_sa_range(suf.first_factor);
+            }
             
             all_suffixes[base_idx + offset] = suf;
         }
@@ -570,11 +579,11 @@ void RLZ_CHAR_SORT<int_t>::sort_lcp_interval(bool apply_resync) {
     std::vector<SortableSuffix> all_suffixes = generate_all_suffixes(apply_resync);
 
     std::sort(all_suffixes.begin(), all_suffixes.end(), [&](const SortableSuffix& a, const SortableSuffix& b) {
-        if (a.is_ind && b.is_ind) {
-            int_t rank_a = csa_ref.isa[a.first_factor.p];
-            int_t rank_b = csa_ref.isa[b.first_factor.p];
-            if (rank_a != rank_b) return rank_a < rank_b; 
-        }
+        // The Disjoint Interval Shortcut (O(1) resolution)
+        if (a.sa_range.second < b.sa_range.first) return true;
+        if (b.sa_range.second < a.sa_range.first) return false;
+
+        // The Overlap Fallback (LCE Evaluation)
         return compare_suffixes(a, b);
     });
 
@@ -610,12 +619,12 @@ void RLZ_CHAR_SORT<int_t>::sort_induced(bool apply_resync) {
     }
 
     // Sort the complete factor suffixes first since they are the most likely to be indicative
-    std::sort(complete_bin.begin(), complete_bin.end(), [&](const SortableSuffix& a, const SortableSuffix& b) {
-        if (a.is_ind && b.is_ind) {
-            int_t rank_a = csa_ref.isa[a.first_factor.p];
-            int_t rank_b = csa_ref.isa[b.first_factor.p];
-            if (rank_a != rank_b) return rank_a < rank_b;
-        }
+    std::sort(complete_bin.begin(), complete_bin.end(), [&](const SortableSuffix& a, const SortableSuffix& b) {        
+        // The Disjoint Interval Shortcut (O(1) resolution)
+        if (a.sa_range.second < b.sa_range.first) return true;
+        if (b.sa_range.second < a.sa_range.first) return false;
+
+        // The Overlap Fallback (LCE Evaluation)
         return compare_suffixes(a, b);
     });
 
@@ -628,6 +637,11 @@ void RLZ_CHAR_SORT<int_t>::sort_induced(bool apply_resync) {
     // Sort the incomplete factors suffixes using the sorted complete factor suffixes knowledge
     // Note this speedup only occurs if two factors are fully consumed at the same time
     std::sort(incomplete_bin.begin(), incomplete_bin.end(), [&](const SortableSuffix& a, const SortableSuffix& b) {
+        // The Disjoint Interval Shortcut (O(1) resolution)
+        if (a.sa_range.second < b.sa_range.first) return true;
+        if (b.sa_range.second < a.sa_range.first) return false;
+
+        // The Overlap Fallback (LCE Evaluation)
         return compare_suffixes(a, b, &factor_ranks);
     });
 
@@ -636,12 +650,31 @@ void RLZ_CHAR_SORT<int_t>::sort_induced(bool apply_resync) {
     // Merge the sorted complete and incomplete factors
     size_t i = 0, j = 0;
     while (i < complete_bin.size() && j < incomplete_bin.size()) {
-        if (compare_suffixes(complete_bin[i], incomplete_bin[j], &factor_ranks)) {
+        const SortableSuffix& a = complete_bin[i];
+        const SortableSuffix& b = incomplete_bin[j];
+        
+        bool a_is_smaller;
+
+        // The Disjoint Interval Shortcut (O(1) resolution)
+        if (a.sa_range.second < b.sa_range.first) {
+            a_is_smaller = true;
+        } 
+        else if (b.sa_range.second < a.sa_range.first) {
+            a_is_smaller = false;
+        } 
+        // The Overlap Fallback (LCE Evaluation)
+        else {
+            a_is_smaller = compare_suffixes(a, b, &factor_ranks);
+        }
+
+        // Push the winner to the final array
+        if (a_is_smaller) {
             sa_T.push_back(complete_bin[i++].id);
         } else {
             sa_T.push_back(incomplete_bin[j++].id);
         }
     }
+    // Flush the remaining elements
     while (i < complete_bin.size()) sa_T.push_back(complete_bin[i++].id);
     while (j < incomplete_bin.size()) sa_T.push_back(incomplete_bin[j++].id);
 
