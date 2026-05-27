@@ -27,9 +27,14 @@ class RLZ_CHAR_SORT
         struct RLZ_Factor { int_t p; int_t l; };
 
         // Represents a suffix starting at a specific character in the parsed text
+        // factor_idx: The 0-based index of the factor within the sequence of factors where the suffix begins
+        // offset: How far within the factor where the suffix starts
         struct SuffixID { size_t factor_idx; int_t offset; };
 
         // Represents a resynchronized state for the sort
+        // id: The underlying SuffixID coordinate
+        // first_factor: The factor after resynchronization or the original factor if option not used
+        // is_ind: Whether first_factor is indicative or not
         struct SortableSuffix { SuffixID id; RLZ_Factor first_factor; bool is_ind; };
 
         std::string ref_content;
@@ -181,35 +186,64 @@ bool RLZ_CHAR_SORT<int_t>::compare_suffixes(const SortableSuffix& a, const Sorta
     int_t la = a.first_factor.l;
     int_t lb = b.first_factor.l;
     
-    size_t idx_a = a.id.factor_idx + 1;
-    size_t idx_b = b.id.factor_idx + 1;
+    size_t idx_a = a.id.factor_idx + 1; // The next factor following a 
+    size_t idx_b = b.id.factor_idx + 1; // The next factor following b
     
     while (true) {
+
+        spdlog::trace("Comparing Factor A: ({},{}) with Factor B: ({},{})", pa, la, pb, lb);
+
         int_t k = get_lce(pa, pb);
 
+        spdlog::trace("LCE value: {} ---- min len: {}", k, std::min(la,lb));
+
         if (k < std::min(la, lb)) {
+            spdlog::trace("Mismatch: A: ['{}'] ---- B: ['{}']", ref_content[pa +k], ref_content[pb + k]);
             return ref_content[pa + k] < ref_content[pb + k];
         } 
         
         if (la < lb) {
-            if (idx_a >= rlz_factors.size()) return true; 
+            spdlog::trace("Factor A fully consumed --- Factor B partially consumed");
+            if (idx_a >= rlz_factors.size()){
+                spdlog::trace("Suffix A has no more factors"); 
+                return true; 
+            }
+            // Adjust Factor B by la
+            pb += la; 
+            lb -= la;
+            // Factor A is now next factor
             pa = rlz_factors[idx_a].p;
             la = rlz_factors[idx_a].l;
             idx_a++;
-            pb += k; 
-            lb -= k;
         } else if (lb < la) {
-            if (idx_b >= rlz_factors.size()) return false; 
+            spdlog::trace("Factor A partially consumed --- Factor B fully consumed");
+            if (idx_b >= rlz_factors.size()){
+                spdlog::trace("Suffix B has no more factors");  
+                return false;
+            }
+            // Adjust Factor A by lb
+            pa += lb; 
+            la -= lb;
+            // Factor B is now next factor 
             pb = rlz_factors[idx_b].p;
             lb = rlz_factors[idx_b].l;
             idx_b++;
-            pa += k; 
-            la -= k;
         } else {
-            if (idx_a >= rlz_factors.size() && idx_b >= rlz_factors.size()) return false;
-            if (idx_a >= rlz_factors.size()) return true;
-            if (idx_b >= rlz_factors.size()) return false;
+            spdlog::trace("Factor A fully consumed --- Factor B fully consumed");
+            if (idx_a >= rlz_factors.size() && idx_b >= rlz_factors.size()) {
+                spdlog::error("Suffixes A and B have no more factors! Should not be possible.");
+                return false;
+            }
+            if (idx_a >= rlz_factors.size()){
+                spdlog::trace("Suffix A has no more factors"); 
+                return true;
+            }
+            if (idx_b >= rlz_factors.size()){
+                spdlog::trace("Suffix B has no more factors"); 
+                return false;
+            }
             
+            // Both factors are the next factor
             pa = rlz_factors[idx_a].p;
             la = rlz_factors[idx_a].l;
             idx_a++;
@@ -344,6 +378,8 @@ std::vector<typename RLZ_CHAR_SORT<int_t>::SortableSuffix> RLZ_CHAR_SORT<int_t>:
             suf.first_factor = effective_first;
             suf.is_ind = is_indicative(effective_first);
             
+            spdlog::trace("Considering factor: ({},{}) --- Indicative: {}", suf.first_factor.p, suf.first_factor.l, suf.is_ind);
+
             all_suffixes.push_back(suf);
         }
     }
