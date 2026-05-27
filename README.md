@@ -173,7 +173,7 @@ There should be no output from this command if the sorting was done correctly.
 > [!NOTE]
 > To get more information from the tools. Run the commands with the -v option.
 
-### License
+## License
 
 This project is licensed under the GNU License - see the [LICENSE](https://github.com/rvarki/rlz/blob/main/LICENSE) file for details
 
