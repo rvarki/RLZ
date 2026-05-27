@@ -35,7 +35,8 @@ class RLZ_CHAR_SORT
         // id: The underlying SuffixID coordinate
         // first_factor: The factor after resynchronization or the original factor if option not used
         // is_ind: Whether first_factor is indicative or not
-        struct SortableSuffix { SuffixID id; RLZ_Factor first_factor; bool is_ind; };
+        // borrowed: Tracks characters consumed from subsequent factors during resync
+        struct SortableSuffix { SuffixID id; RLZ_Factor first_factor; bool is_ind; int_t borrowed; };
 
         std::string ref_content;
         sort_csa_index_t csa_ref; 
@@ -188,6 +189,31 @@ bool RLZ_CHAR_SORT<int_t>::compare_suffixes(const SortableSuffix& a, const Sorta
     
     size_t idx_a = a.id.factor_idx + 1; // The next factor following a 
     size_t idx_b = b.id.factor_idx + 1; // The next factor following b
+
+    int_t skip_a = a.borrowed;
+    int_t skip_b = b.borrowed;
+
+    // Helper lambda to fetch the next valid block of characters, safely skipping 'borrowed' segments
+    auto fetch_next = [&](size_t& idx, int_t& p, int_t& l, int_t& skip) 
+    {
+        while (idx < this->rlz_factors.size()) 
+        {
+            int_t next_l = this->rlz_factors[idx].l;
+            if (skip >= next_l) {
+                skip -= next_l; // Entire factor was swallowed
+                idx++;
+            } 
+            else {
+                p = this->rlz_factors[idx].p + skip;
+                l = next_l - skip;
+                skip = 0;
+                idx++;
+                return true;
+            }
+        }
+        l = 0;
+        return false;
+    };
     
     while (true) {
 
@@ -204,52 +230,43 @@ bool RLZ_CHAR_SORT<int_t>::compare_suffixes(const SortableSuffix& a, const Sorta
         
         if (la < lb) {
             spdlog::trace("Factor A fully consumed --- Factor B partially consumed");
-            if (idx_a >= rlz_factors.size()){
-                spdlog::trace("Suffix A has no more factors"); 
-                return true; 
-            }
             // Adjust Factor B by la
             pb += la; 
             lb -= la;
-            // Factor A is now next factor
-            pa = rlz_factors[idx_a].p;
-            la = rlz_factors[idx_a].l;
-            idx_a++;
+            // Move Suffix A to next factor if possible
+            if (!fetch_next(idx_a, pa, la, skip_a)){
+                spdlog::trace("Suffix A has no more factors"); 
+                return true; 
+            }
         } else if (lb < la) {
             spdlog::trace("Factor A partially consumed --- Factor B fully consumed");
-            if (idx_b >= rlz_factors.size()){
-                spdlog::trace("Suffix B has no more factors");  
-                return false;
-            }
             // Adjust Factor A by lb
             pa += lb; 
             la -= lb;
-            // Factor B is now next factor 
-            pb = rlz_factors[idx_b].p;
-            lb = rlz_factors[idx_b].l;
-            idx_b++;
+            // Move Suffix B to next factor if possible
+            if (!fetch_next(idx_b, pb, lb, skip_b)){
+                spdlog::trace("Suffix B has no more factors");  
+                return false;
+            }
         } else {
             spdlog::trace("Factor A fully consumed --- Factor B fully consumed");
-            if (idx_a >= rlz_factors.size() && idx_b >= rlz_factors.size()) {
+
+            // Move Suffixes A and B to next factor if possible
+            bool a_has_more = fetch_next(idx_a, pa, la, skip_a);
+            bool b_has_more = fetch_next(idx_b, pb, lb, skip_b);
+
+            if (!a_has_more && !b_has_more) {
                 spdlog::error("Suffixes A and B have no more factors! Should not be possible.");
                 return false;
             }
-            if (idx_a >= rlz_factors.size()){
+            if (!a_has_more){
                 spdlog::trace("Suffix A has no more factors"); 
                 return true;
             }
-            if (idx_b >= rlz_factors.size()){
+            if (!b_has_more){
                 spdlog::trace("Suffix B has no more factors"); 
                 return false;
             }
-            
-            // Both factors are the next factor
-            pa = rlz_factors[idx_a].p;
-            la = rlz_factors[idx_a].l;
-            idx_a++;
-            pb = rlz_factors[idx_b].p;
-            lb = rlz_factors[idx_b].l;
-            idx_b++;
         }
     }
 }
@@ -366,9 +383,10 @@ std::vector<typename RLZ_CHAR_SORT<int_t>::SortableSuffix> RLZ_CHAR_SORT<int_t>:
             SortableSuffix suf;
             suf.id = {static_cast<size_t>(i), static_cast<int_t>(offset)};
             
+            int_t orig_l = static_cast<int_t>(rlz_factors[i].l - offset);
             RLZ_Factor effective_first = {
                 static_cast<int_t>(rlz_factors[i].p + offset), 
-                static_cast<int_t>(rlz_factors[i].l - offset)
+                orig_l
             };
             
             if (offset > 0 && apply_resync && i + 1 < rlz_factors.size()) {
@@ -377,6 +395,7 @@ std::vector<typename RLZ_CHAR_SORT<int_t>::SortableSuffix> RLZ_CHAR_SORT<int_t>:
             
             suf.first_factor = effective_first;
             suf.is_ind = is_indicative(effective_first);
+            suf.borrowed = static_cast<int_t>(effective_first.l - orig_l);
             
             spdlog::trace("Considering factor: ({},{}) --- Indicative: {}", suf.first_factor.p, suf.first_factor.l, suf.is_ind);
 
