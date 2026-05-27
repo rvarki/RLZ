@@ -45,8 +45,6 @@ class RLZ_CHAR_SORT
         std::vector<RLZ_Factor> rlz_factors;
         std::vector<SuffixID> sa_T; // Stores the suffix array as 2D representation 
 
-        size_t original_size = 0; 
-
         RLZ_CHAR_SORT(const std::string ref_file, const std::string parse_file);
         ~RLZ_CHAR_SORT();
 
@@ -291,73 +289,153 @@ bool RLZ_CHAR_SORT<int_t>::is_indicative(const RLZ_Factor& f) {
 }
 
 /**
- * @brief Finds the Suffix Array (SA) range for a non-indicative factor (Algorithm 3.3).
- * Non-indicative factors correspond to matches that occur multiple times in the 
- * reference. This method scans the LCP array to find the consecutive bounds in 
- * the SA that contain all alternative valid occurrences of the factor.
- * @param [in] f [RLZ_Factor] The non-indicative RLZ factor.
+ * @brief Finds the Suffix Array (SA) range for a factor using O(log N) RMQ Binary Search.
+ * Utilizes the succinct Range Minimum Query (RMQ) structure to binary search the exact boundaries 
+ * where the minimum LCP drops below the factor length.
+ * @param [in] f [RLZ_Factor] The RLZ factor.
  * @return [std::pair<int_t, int_t>] The [start, end] indices in the Suffix Array.
  */
-
 template<typename int_t>
 std::pair<int_t, int_t> RLZ_CHAR_SORT<int_t>::get_sa_range(const RLZ_Factor& f) {
     size_t i = csa_ref.isa[f.p];
-    size_t sp = i;
-    size_t ep = i;
-
-    while (sp > 0 && lcp_ref[sp] >= f.l) sp--;
-    while (ep < csa_ref.size() - 1 && lcp_ref[ep + 1] >= f.l) ep++;
     
-    return {sp, ep};
+    // Binary Search for the Start Pointer (sp)
+    size_t low_sp = 0;
+    size_t high_sp = i;
+    
+    while (low_sp < high_sp) {
+        size_t mid = low_sp + (high_sp - low_sp) / 2;
+        
+        // O(1) query: Find the minimum LCP in the range [mid + 1, i]
+        size_t min_idx = lcp_rmq(mid + 1, i);
+        
+        if (lcp_ref[min_idx] >= f.l) {
+            // The whole range from mid to i has LCP >= f.l
+            // So the drop-off boundary must be further left (or exactly at mid)
+            high_sp = mid; 
+        } else {
+            // The minimum is less than f.l, so mid is too far left
+            low_sp = mid + 1; 
+        }
+    }
+    size_t sp = low_sp;
+
+    // Binary Search for the End Pointer (ep)
+    size_t low_ep = i;
+    size_t high_ep = csa_ref.size() - 1;
+    
+    while (low_ep < high_ep) {
+        // Ceiling division (+1) prevents infinite loops when low == high - 1
+        size_t mid = low_ep + (high_ep - low_ep + 1) / 2; 
+        
+        // O(1) query: Find the minimum LCP in the range [i + 1, mid]
+        size_t min_idx = lcp_rmq(i + 1, mid);
+        
+        if (lcp_ref[min_idx] >= f.l) {
+            // The whole range from i to mid has LCP >= f.l
+            // So the drop-off boundary must be further right (or exactly at mid)
+            low_ep = mid; 
+        } else {
+            // The minimum is less than f.l, so mid is too far right
+            high_ep = mid - 1; 
+        }
+    }
+    size_t ep = high_ep;
+
+    return {static_cast<int_t>(sp), static_cast<int_t>(ep)};
 }
 
 /**
  * @brief Restores right-maximality to incomplete factors (Algorithm 3.4).
- * Incomplete factors lack right-maximality due to artificial boundaries created 
- * by the greedy parsing strategy. This method searches the SA range for an 
- * overlapping occurrence that allows the factor to seamlessly consume characters 
- * from the succeeding factor, maximizing its length and indicativity.
+ * Optimized to use O(log N) binary search over the Suffix Array. 
+ * Because all suffixes in range_i share the prefix f_i, their 
+ * continuations are perfectly sorted, allowing us to find the maximum overlap 
+ * instantly without scanning millions of candidate locations.
  * @param [in] f_i    [RLZ_Factor] The incomplete factor.
  * @param [in] f_next [RLZ_Factor] The factor immediately following f_i.
  * @return [RLZ_Factor] The updated right-maximal factor (or original if no overlap).
  */
-
 template<typename int_t>
 typename RLZ_CHAR_SORT<int_t>::RLZ_Factor RLZ_CHAR_SORT<int_t>::apply_resynchronization(const RLZ_Factor& f_i, const RLZ_Factor& f_next) {
     std::pair<int_t, int_t> range_i = get_sa_range(f_i);
     
-    RLZ_Factor f_next_char = {f_next.p, 1};
-    std::pair<int_t, int_t> range_next = get_sa_range(f_next_char);
-    
-    bool overlap_exists = false;
+    // Safety check: if factor doesn't exist, return original
+    if (range_i.first > range_i.second) return f_i;
+
     int_t best_p = f_i.p; 
     int_t max_k = 0;
+    bool perfect_match = false;
     
-    for (size_t j = range_i.first; j <= range_i.second; ++j) {
-        size_t target_pos = csa_ref[j] + f_i.l;
+    // Binary search for the lexicographical insertion point of f_next
+    size_t low = range_i.first;
+    size_t high = static_cast<size_t>(range_i.second) + 1;
+    
+    while (low < high) {
+        size_t mid = low + (high - low) / 2;
+        int_t candidate_p = csa_ref[mid];
         
-        if (target_pos < csa_ref.size()) {
-            size_t rank = csa_ref.isa[target_pos];
-            
-            if (rank >= range_next.first && rank <= range_next.second) {
-                int_t candidate_p = csa_ref[j];
+        // If the candidate suffix is too close to the end of the text, treat as smaller
+        if (static_cast<size_t>(candidate_p + f_i.l) >= ref_content.size()) {
+            low = mid + 1;
+            continue;
+        }
+
+        int_t k = get_lce(candidate_p + f_i.l, f_next.p);
+        
+        if (k >= f_next.l) {
+            // We found a perfect overlap that consumes all of f_next. Stop searching.
+            max_k = f_next.l;
+            best_p = candidate_p;
+            perfect_match = true;
+            break;
+        }
+        
+        // Look at the differing character to guide the binary search
+        char c_candidate = (static_cast<size_t>(candidate_p + f_i.l + k) < ref_content.size()) ? ref_content[candidate_p + f_i.l + k] : '\0';
+                           
+        char c_target = (static_cast<size_t>(f_next.p + k) < ref_content.size()) ? ref_content[f_next.p + k] : '\0';
+        
+        if (c_candidate < c_target) {
+            low = mid + 1;
+        } else {
+            high = mid;
+        }
+    }
+    
+    // If a perfect match wasn't found, the longest match is guaranteed to be 
+    // at either the insertion point (low) or the element right before it (low - 1).
+    if (!perfect_match) {
+        // Evaluate 'low'
+        if (low >= static_cast<size_t>(range_i.first) && low <= static_cast<size_t>(range_i.second)) {
+            int_t candidate_p = csa_ref[low];
+            if (static_cast<size_t>(candidate_p + f_i.l) < ref_content.size()) {
                 int_t current_k = get_lce(candidate_p + f_i.l, f_next.p);
-                
                 if (current_k > max_k) {
-                    max_k = current_k;
+                    max_k = std::min(current_k, f_next.l);
                     best_p = candidate_p;
-                    overlap_exists = true;
-                    if (max_k >= f_next.l) break;
+                }
+            }
+        }
+        
+        // Evaluate 'low - 1'
+        if (low > static_cast<size_t>(range_i.first) && (low - 1) <= static_cast<size_t>(range_i.second)) {
+            int_t candidate_p = csa_ref[low - 1];
+            if (static_cast<size_t>(candidate_p + f_i.l) < ref_content.size()) {
+                int_t current_k = get_lce(candidate_p + f_i.l, f_next.p);
+                if (current_k > max_k) {
+                    max_k = std::min(current_k, f_next.l);
+                    best_p = candidate_p;
                 }
             }
         }
     }
     
-    if (overlap_exists) {
-        int_t k_prime = std::min(max_k, f_next.l);
-        return {best_p, static_cast<int_t>(f_i.l + k_prime)};
+    if (max_k > 0) {
+        spdlog::trace("Resynchronization occured");
+        return {best_p, static_cast<int_t>(f_i.l + max_k)};
     }
     
+    spdlog::trace("Resynchronization did not occur");
     return f_i;
 }
 
@@ -375,9 +453,19 @@ template<typename int_t>
 std::vector<typename RLZ_CHAR_SORT<int_t>::SortableSuffix> RLZ_CHAR_SORT<int_t>::generate_all_suffixes(bool apply_resync) {
     spdlog::debug("Generating all character-level suffixes (Resync: {})", apply_resync);
     
-    std::vector<SortableSuffix> all_suffixes;
+    // Get number of suffixes
+    size_t total_suffixes = 0;
+    std::vector<size_t> factor_starts(rlz_factors.size());
+    for (size_t i = 0; i < rlz_factors.size(); ++i) {
+        factor_starts[i] = total_suffixes;
+        total_suffixes += rlz_factors[i].l;
+    }
+
+    // Pre-allocate the exact amount of required memory once
+    std::vector<SortableSuffix> all_suffixes(total_suffixes);
     
     for (size_t i = 0; i < rlz_factors.size(); ++i) {
+        size_t base_idx = factor_starts[i];
         for (size_t offset = 0; offset < rlz_factors[i].l; ++offset) {
             
             SortableSuffix suf;
@@ -388,18 +476,23 @@ std::vector<typename RLZ_CHAR_SORT<int_t>::SortableSuffix> RLZ_CHAR_SORT<int_t>:
                 static_cast<int_t>(rlz_factors[i].p + offset), 
                 orig_l
             };
+
+            bool already_ind = is_indicative(effective_first);
             
-            if (offset > 0 && apply_resync && i + 1 < rlz_factors.size()) {
+            if (!already_ind && offset > 0 && apply_resync && i + 1 < rlz_factors.size()) {
+                spdlog::trace("Factor ({},{}) is not indicative so trying to resync", effective_first.p, effective_first.l);
                 effective_first = apply_resynchronization(effective_first, rlz_factors[i+1]);
+                suf.is_ind = is_indicative(effective_first); // Re-evaluate after extending
+            } 
+            else {
+                spdlog::trace("Factor ({},{}) is indicative so no resyncing", effective_first.p, effective_first.l); 
+                suf.is_ind = already_ind; 
             }
             
             suf.first_factor = effective_first;
-            suf.is_ind = is_indicative(effective_first);
             suf.borrowed = static_cast<int_t>(effective_first.l - orig_l);
             
-            spdlog::trace("Considering factor: ({},{}) --- Indicative: {}", suf.first_factor.p, suf.first_factor.l, suf.is_ind);
-
-            all_suffixes.push_back(suf);
+            all_suffixes[base_idx + offset] = suf;
         }
     }
     
