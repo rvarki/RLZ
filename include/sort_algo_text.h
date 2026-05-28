@@ -22,7 +22,8 @@ class TEXT_SORT
         ~TEXT_SORT();
 
         bool comparator(std::string_view a, std::string_view b, size_t& char_count);
-        void build_sa(const std::string seq_file, bool json);
+        void build_sa();
+        void write_json(const std::string seq_file);
         void write_sa(const std::string seq_file);
     
     private:

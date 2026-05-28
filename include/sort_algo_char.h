@@ -10,6 +10,7 @@
 
 #include <string>
 #include "utility.h"
+#include "benchmark_logger.h"
 #include "spdlog/spdlog.h"
 #include "spdlog/stopwatch.h"
 #include <fstream>
@@ -53,6 +54,7 @@ class RLZ_CHAR_SORT
         void sort_lcp_interval(bool apply_resync = false);
         void sort_induced(bool apply_resync = false);
         void sort_factors_only(bool apply_resync = false);
+        void write_json(const std::string out_file, const std::string configuration);
         void stream_sa_to_file(const std::string out_file);
     
     private:
@@ -915,6 +917,44 @@ void RLZ_CHAR_SORT<int_t>::sort_factors_only(bool apply_resync) {
     spdlog::info("Factor-Only Sort completed in {:.3f} seconds", metric_sort_time);
 }
 
+/**
+ * @brief Dumps internal sorting metrics to the JSON Lines benchmark log.
+ * Acts as a class-level adapter for the global benchmark logger. It automatically 
+ * aggregates all tracked private metrics (O(1) shortcut hits, parsing stats, 
+ * and execution timings) and pushes them to disk using the RLZ-specific JSON schema.
+ * Must be called at the very end of a sorting routine after final percentages are calculated.
+ *
+ * @param parse_file    Base path/identifier for the input data, used to name the output log file.
+ * @param configuration Identifier for the specific sorting strategy executed (e.g., "Induced_Sort").
+ */
+
+
+template<typename int_t>
+void RLZ_CHAR_SORT<int_t>::write_json(const std::string parse_file, const std::string configuration)
+{
+    write_sort_benchmark_jsonl(
+        parse_file,                      // input_path 
+        configuration,                   // config_name 
+        metric_text_size,                // text_size
+        metric_sort_time,                // sort_time
+        metric_suffix_comps,             // suffix_comps
+        metric_boundary_hits,            // unit_comps (LCE boundary checks)
+        metric_avg_boundary_per_comp,    // avg_unit_per_comp
+        true,                            // is_rlz
+        metric_factor_size,              // total_factors
+        metric_indicative,               // indicative
+        metric_not_indicative,           // not_indicative
+        metric_interval_hits,            // interval_hits
+        interval_percentage,             // interval_percentage
+        metric_backbone_hits,            // backbone_hits
+        backbone_percentage,             // backbone_percentage
+        metric_preprocess_time,          // preprocess_time
+        metric_resync_time,              // resync_time
+        metric_resync,                   // resync
+        metric_resync_indicative,        // resync_indicative
+        metric_resync_not_indicative     // resync_not_indicative
+    );
+}
 
 
 /**

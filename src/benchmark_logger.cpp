@@ -11,25 +11,32 @@
 #include "spdlog/spdlog.h"
 
 /**
- * @brief Appends sorting benchmark stats to a JSON Lines (.jsonl) file.
+ * @brief Writes sorting benchmark stats to a JSON Lines (.jsonl) file.
  * Writes standard hardware and execution metrics for all sorting algorithms. 
  * If the run utilizes the RLZ architecture, it optionally appends a sparse 
  * sub-object containing optimization benchmarks.
  *
  * @param input_path         Base path of the input text (used to name the output file).
- * @param config_name        Identifier for the algorithm/configuration (e.g., "text_naive", "rlz_greedy").
+ * @param config_name        Identifier for the algorithm/configuration.
  * @param text_size          Total size of the uncompressed reference text in bytes.
  * @param sort_time          Total wall-clock execution time of the sorting phase (seconds).
  * @param suffix_comps       Total number of suffix-level comparisons evaluated.
  * @param unit_comps         Total number of individual character/boundary comparisons (LCE cost).
  * @param avg_unit_per_comp  Average char/boundary depth per suffix comparison .
  * @param is_rlz             Flag indicating if RLZ-specific stats should be attached.
- * @param total_factors      [RLZ] The total number of parsed macro-blocks/factors.
+ * @param total_factors      [RLZ] The total number of RLZ factors.
+ * @param indicative         [RLZ] The total number of indicative factors
+ * @param not_indicative     [RLZ] The total number of non-indicative factors
  * @param interval_hits      [RLZ] Times the O(1) disjoint interval shortcut bypassed LCE jumps.
+ * @param interval_percentage [RLZ] (interval_hits / suffix_comps) * 100
  * @param backbone_hits      [RLZ] Times incomplete suffixes were resolved via the O(1) backbone trick.
+ * @param backbone_percentage [RLZ] (backbone_bits / suffix_comps) * 100
+ * @param preprocess_time     [RLZ] Time it takes to generate all the suffixes and associated information.
+ * @param resync_time         [RLZ] Time it takes to resync all necessary factors (subset of preprocess time)
+ * @param resync              [RLZ] The total number of factors that benefitted from resynchronization
+ * @param resync_indicative   [RLZ] The total number of indicative factors after resynchronization
+ * @param resync_not_indicative [RLZ] The total number of non-indicative factors after resynchronization
  */
-
-
 void write_sort_benchmark_jsonl(const std::string& input_path, 
                                 const std::string& config_name,
                                 size_t text_size,
@@ -39,8 +46,17 @@ void write_sort_benchmark_jsonl(const std::string& input_path,
                                 double avg_unit_per_comp,
                                 bool is_rlz,
                                 size_t total_factors,
+                                size_t indicative,
+                                size_t not_indicative,
                                 size_t interval_hits,
-                                size_t backbone_hits)
+                                double interval_percentage,
+                                size_t backbone_hits,
+                                double backbone_percentage,
+                                double preprocess_time,
+                                double resync_time,
+                                size_t resync,
+                                size_t resync_indicative,
+                                size_t resync_not_indicative)
 {
     // Switch to .jsonl to indicate line-delimited JSON
     std::string jsonl_path = input_path + ".sort.jsonl";
@@ -65,8 +81,17 @@ void write_sort_benchmark_jsonl(const std::string& input_path,
     if (is_rlz) {
         json_file << ", \"RLZ_Metrics\": {"
                   << "\"Total_Factors\": " << total_factors << ", "
+                  << "\"Indicative\": " << indicative << ", "
+                  << "\"Not_Indicative\": " << not_indicative << ", "
                   << "\"Interval_Shortcut_Hits\": " << interval_hits << ", "
-                  << "\"Backbone_Shortcut_Hits\": " << backbone_hits
+                  << "\"Interval_Percentage\": " << interval_percentage << ", "
+                  << "\"Backbone_Shortcut_Hits\": " << backbone_hits << ", "
+                  << "\"Backbone_Percentage\": " << backbone_percentage << ", "
+                  << "\"Preprocess_Time\": " << preprocess_time << ", "
+                  << "\"Resync_Time\": " << resync_time << ", "
+                  << "\"Resync\": " << resync << ", "
+                  << "\"Resync_Indicative\": " << resync_indicative << ", "
+                  << "\"Resync_Not_Indicative\": " << resync_not_indicative
                   << "}";
     }
     

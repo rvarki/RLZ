@@ -100,13 +100,11 @@ bool TEXT_SORT::comparator(std::string_view a, std::string_view b, size_t& char_
  * Sorts the suffixes using a custom comparison operator. Worst case is O(N^2log(N)) since 
  * there are O(Nlog(N)) comparisons and each comparison takes O(N) time worst case. There 
  * are more efficient manners to create the suffix array, but the purpose is to compare 
- * sorting time with RLZ version, therefore an inefficient but compatible metho with RLZ was chosen.
+ * sorting time with RLZ version, therefore an inefficient but compatible method with RLZ was chosen.
  * 
- * @param [in] seq_file [string] The path to the sequence file
- * @param [in] json [bool] Whether to produce json lines file containing sort stats
  */
 
-void TEXT_SORT::build_sa(const std::string seq_file, bool json) 
+void TEXT_SORT::build_sa() 
 {
     spdlog::stopwatch sw_sort;
 
@@ -135,9 +133,28 @@ void TEXT_SORT::build_sa(const std::string seq_file, bool json)
     spdlog::debug("Average number of characters compared per suffix comparison: {:.3f}", metric_avg_char_per_comp);
 
     spdlog::info("Finished sorting text suffixes in {:.3f} seconds", metric_sort_time);
+}
 
-    // If outputting JSON lines is requested
-    if (json) { write_sort_benchmark_jsonl(seq_file, "Text", metric_text_size, metric_sort_time, metric_suffix_comps, metric_char_hits, metric_avg_char_per_comp); }
+/**
+ * @brief Dumps internal sorting metrics to the JSON Lines benchmark log.
+ * Acts as a class-level adapter for the global benchmark logger. It automatically 
+ * aggregates all tracked private metrics and pushes them to disk using the Text-specific JSON schema.
+ * Must be called at the very end of the sorting routine.
+ *
+ * @param seq_file    Base path/identifier for the input data, used to name the output log file.
+ */
+
+void TEXT_SORT::write_json(const std::string seq_file)
+{
+    write_sort_benchmark_jsonl(
+        seq_file, // input path
+        "Text", // config name
+        metric_text_size, // text size
+        metric_sort_time, // sort time
+        metric_suffix_comps, // suffix comps
+        metric_char_hits, // unit comps
+        metric_avg_char_per_comp // avg unit per comp
+    );   
 }
 
 

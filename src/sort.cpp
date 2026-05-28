@@ -9,6 +9,7 @@
 #include "sort_algo_bit.h"
 #include "sort_algo_char.h"
 #include "sort_algo_text.h"
+#include "benchmark_logger.h"
 #include "spdlog/spdlog.h"
 #include "spdlog/stopwatch.h"
 #include <cstdint>
@@ -26,10 +27,22 @@ void run_rlz_char_sort(const std::string& ref_file, const std::string& parse_fil
 {
     RLZ_CHAR_SORT<int_t> main_parser(ref_file, parse_file);
 
-    if (naive){ main_parser.sort_naive(resync); }
-    else if (interval) { main_parser.sort_lcp_interval(resync); }
-    else if (induced) { main_parser.sort_induced(resync); }
-    else if (only_factor) { main_parser.sort_factors_only(resync); }
+    if (naive){ 
+        main_parser.sort_naive(resync);
+        if (json) { main_parser.write_json(parse_file, "Naive_Sort"); } 
+    }
+    else if (interval) { 
+        main_parser.sort_lcp_interval(resync); 
+        if (json) { main_parser.write_json(parse_file, "Interval_Sort"); }
+    }
+    else if (induced) { 
+        main_parser.sort_induced(resync);
+        if (json) { main_parser.write_json(parse_file, "Induced_Sort"); }
+    }
+    else if (only_factor) { 
+        main_parser.sort_factors_only(resync); 
+        if (json) { main_parser.write_json(parse_file, "Factor_Only_Sort"); }
+    }
     else { 
         spdlog::error("Compression option not chosen!");
         std::exit(1); 
@@ -42,7 +55,8 @@ void run_rlz_char_sort(const std::string& ref_file, const std::string& parse_fil
 void run_text_sort(const std::string& seq_file, bool json)
 {
     TEXT_SORT main_parser(seq_file);
-    main_parser.build_sa(seq_file, json);
+    main_parser.build_sa();
+    if (json) { main_parser.write_json(seq_file); }
     main_parser.write_sa(seq_file);
 }
 

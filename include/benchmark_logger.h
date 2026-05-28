@@ -17,9 +17,19 @@ void write_sort_benchmark_jsonl(const std::string& input_path,
                                 size_t suffix_comps, 
                                 size_t unit_comps,
                                 double avg_unit_per_comp,
+                                // RLZ-specific metric defaults
                                 bool is_rlz = false,
                                 size_t total_factors = 0,
+                                size_t indicative = 0,
+                                size_t not_indicative = 0,
                                 size_t interval_hits = 0,
-                                size_t backbone_hits = 0);
+                                double interval_percentage = 0.0,
+                                size_t backbone_hits = 0,
+                                double backbone_percentage = 0.0,
+                                double preprocess_time = 0.0,
+                                double resync_time = 0.0,
+                                size_t resync = 0,
+                                size_t resync_indicative = 0,
+                                size_t resync_not_indicative = 0);
 
 #endif
