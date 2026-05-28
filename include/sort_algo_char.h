@@ -52,6 +52,7 @@ class RLZ_CHAR_SORT
         void sort_naive(bool apply_resync = false);
         void sort_lcp_interval(bool apply_resync = false);
         void sort_induced(bool apply_resync = false);
+        void sort_factors_only(bool apply_resync = false);
         void stream_sa_to_file(const std::string out_file);
     
     private:
@@ -61,6 +62,7 @@ class RLZ_CHAR_SORT
         std::pair<int_t, int_t> get_sa_range(const RLZ_Factor& f);
         RLZ_Factor apply_resynchronization(const RLZ_Factor& f_i, const RLZ_Factor& f_next);
         std::vector<SortableSuffix> generate_all_suffixes(bool apply_resync);
+        std::vector<SortableSuffix> generate_factor_boundaries(bool apply_resync);
 };
 
 /**
@@ -537,6 +539,58 @@ std::vector<typename RLZ_CHAR_SORT<int_t>::SortableSuffix> RLZ_CHAR_SORT<int_t>:
 }
 
 /**
+ * @brief Generates complete factor boundaries (offset == 0) for partial SA construction.
+ * Supports optional resynchronization, which is highly valuable for non-greedy 
+ * parsing strategies where boundaries are structurally fixed but not strictly right-maximal.
+ * @param [in] apply_resync [bool] Toggle to enable boundary right-extension.
+ * @return [std::vector<SortableSuffix>] Array of complete factors with cached intervals.
+ */
+template<typename int_t>
+std::vector<typename RLZ_CHAR_SORT<int_t>::SortableSuffix> RLZ_CHAR_SORT<int_t>::generate_factor_boundaries(bool apply_resync) {
+    spdlog::debug("Generating ONLY factor boundaries (Resync enabled: {})", apply_resync);
+    
+    std::vector<SortableSuffix> boundaries;
+    boundaries.reserve(rlz_factors.size());
+    
+    for (size_t i = 0; i < rlz_factors.size(); ++i) {
+        SortableSuffix suf;
+        suf.id = {static_cast<size_t>(i), 0}; // Strict 0 offset
+        
+        RLZ_Factor effective_first = rlz_factors[i];
+        int_t orig_l = effective_first.l;
+        
+        // Check if factor is already mathematically unique
+        bool already_ind = is_indicative(effective_first);
+        
+        // Only attempt to extend if the factor is non-indicative AND resync is requested
+        // Only request resync for this sort if you specied a match length during inital RLZ parsing
+        if (!already_ind && apply_resync && i + 1 < rlz_factors.size()) {
+            effective_first = apply_resynchronization(effective_first, rlz_factors[i+1]);
+            suf.is_ind = is_indicative(effective_first); // Re-evaluate after extension
+        } else {
+            suf.is_ind = already_ind;
+        }
+        
+        suf.first_factor = effective_first;
+        suf.borrowed = static_cast<int_t>(effective_first.l - orig_l);
+        
+        //  Cache the Suffix Array interval efficiently
+        if (suf.is_ind) {
+            // O(1) instantaneous lookup for unique factors
+            int_t rank = csa_ref.isa[suf.first_factor.p];
+            suf.sa_range = {rank, rank}; 
+        } else {
+            // O(log N) RMQ binary search for non-unique factors
+            suf.sa_range = get_sa_range(suf.first_factor);
+        }
+        
+        boundaries.push_back(suf);
+    }
+    
+    return boundaries;
+}
+
+/**
  * @brief Baseline sorting strategy (O(nlogn) factor comparisons).
  * Evaluates all suffixes indiscriminately using introsort combined with Algorithm 3.1. 
  * Does not utilize LCP interval pruning or induced sorting mechanics. Acts as the 
@@ -680,6 +734,39 @@ void RLZ_CHAR_SORT<int_t>::sort_induced(bool apply_resync) {
 
     spdlog::info("Induced Sort completed in {:.3} seconds", sw_sort.elapsed().count());
 }
+
+/**
+ * @brief Sorts only the complete RLZ factors to output a partial Suffix Array.
+ * @param [in] apply_resync [bool] Toggle to enable or bypass boundary repair.
+ * @note apply_resync would only be needed if user specified match-length during initial RLZ parsing.
+ * @return void
+ */
+template<typename int_t>
+void RLZ_CHAR_SORT<int_t>::sort_factors_only(bool apply_resync) {
+    spdlog::info("Executing Factor-Only Sort (Resync flag: {})", apply_resync);
+    spdlog::stopwatch sw_sort;
+    
+    // Pass the flag down to the generator
+    std::vector<SortableSuffix> complete_bin = generate_factor_boundaries(apply_resync);
+
+    std::sort(complete_bin.begin(), complete_bin.end(), [&](const SortableSuffix& a, const SortableSuffix& b) {
+        // The Disjoint Interval Shortcut (O(1) resolution)
+        if (a.sa_range.second < b.sa_range.first) return true;
+        if (b.sa_range.second < a.sa_range.first) return false;
+        
+        // The Overlap Fallback (LCE Evaluation)
+        return compare_suffixes(a, b);
+    });
+
+    sa_T.reserve(complete_bin.size());
+    for(const auto& suf : complete_bin) {
+        sa_T.push_back(suf.id);
+    }
+
+    spdlog::info("Factor-Only Sort completed in {:.3} seconds", sw_sort.elapsed().count());
+}
+
+
 
 /**
  * @brief Streams the 2D Suffix Array to disk as a 1D Suffix Array in text format.

@@ -29,7 +29,7 @@ void run_rlz_char_sort(const std::string& ref_file, const std::string& parse_fil
     if (naive){ main_parser.sort_naive(resync); }
     else if (interval) { main_parser.sort_lcp_interval(resync); }
     else if (induced) { main_parser.sort_induced(resync); }
-    else if (only_factor) {}
+    else if (only_factor) { main_parser.sort_factors_only(resync); }
     else { 
         spdlog::error("Compression option not chosen!");
         std::exit(1); 
