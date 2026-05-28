@@ -148,7 +148,7 @@ void TEXT_SORT::write_json(const std::string seq_file)
 {
     write_sort_benchmark_jsonl(
         seq_file, // input path
-        "Text", // config name
+        "Text_Sort", // config name
         metric_text_size, // text size
         metric_sort_time, // sort time
         metric_suffix_comps, // suffix comps
