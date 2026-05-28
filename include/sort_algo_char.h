@@ -536,6 +536,10 @@ std::vector<typename RLZ_CHAR_SORT<int_t>::SortableSuffix> RLZ_CHAR_SORT<int_t>:
             };
 
             bool already_ind = is_indicative(effective_first);
+
+            // Keep track of indicativeness before resynchronization
+            if (already_ind) { metric_indicative++; }
+            else { metric_not_indicative++; }
             
             if (!already_ind && offset > 0 && apply_resync && i + 1 < rlz_factors.size()) {
                 spdlog::trace("Factor ({},{}) is not indicative so trying to resync", effective_first.p, effective_first.l);
@@ -546,6 +550,10 @@ std::vector<typename RLZ_CHAR_SORT<int_t>::SortableSuffix> RLZ_CHAR_SORT<int_t>:
                 spdlog::trace("Factor ({},{}) is either indicative or resync not enabled", effective_first.p, effective_first.l); 
                 suf.is_ind = already_ind; 
             }
+
+            // Track indicativeness after resynchronization
+            if (suf.is_ind) { metric_resync_indicative++; }
+            else { metric_resync_not_indicative++; }
             
             suf.first_factor = effective_first;
             suf.borrowed = static_cast<int_t>(effective_first.l - orig_l);
@@ -564,6 +572,10 @@ std::vector<typename RLZ_CHAR_SORT<int_t>::SortableSuffix> RLZ_CHAR_SORT<int_t>:
         }
     }
     
+    spdlog::debug("Prior to resynchronization there were {} indicative factors", metric_indicative);
+    spdlog::debug("Prior to resynchronization there were {} non-indicative factors", metric_not_indicative);
+    spdlog::debug("After resynchronization there were {} indicative factors", metric_resync_indicative);
+    spdlog::debug("After resynchronization there were {} non-indicative factors", metric_resync_not_indicative);
     spdlog::debug("{} factors were resynchronized", metric_resync);
     spdlog::debug("Resynchronization of factors took {:.3} seconds", metric_resync_time);
 
@@ -597,6 +609,10 @@ std::vector<typename RLZ_CHAR_SORT<int_t>::SortableSuffix> RLZ_CHAR_SORT<int_t>:
         
         // Check if factor is already mathematically unique
         bool already_ind = is_indicative(effective_first);
+
+        // Keep track of indicativeness before resynchronization
+        if (already_ind) { metric_indicative++; }
+        else { metric_not_indicative++; }
         
         // Only attempt to extend if the factor is non-indicative AND resync is requested
         // Only request resync for this sort if you specied a match length during inital RLZ parsing
@@ -606,6 +622,10 @@ std::vector<typename RLZ_CHAR_SORT<int_t>::SortableSuffix> RLZ_CHAR_SORT<int_t>:
         } else {
             suf.is_ind = already_ind;
         }
+
+        // Track indicativeness after resynchronization
+        if (suf.is_ind) { metric_resync_indicative++; }
+        else { metric_resync_not_indicative++; }
         
         suf.first_factor = effective_first;
         suf.borrowed = static_cast<int_t>(effective_first.l - orig_l);
@@ -625,6 +645,10 @@ std::vector<typename RLZ_CHAR_SORT<int_t>::SortableSuffix> RLZ_CHAR_SORT<int_t>:
         boundaries.push_back(suf);
     }
 
+    spdlog::debug("Prior to resynchronization there were {} indicative factors", metric_indicative);
+    spdlog::debug("Prior to resynchronization there were {} non-indicative factors", metric_not_indicative);
+    spdlog::debug("After resynchronization there were {} indicative factors", metric_resync_indicative);
+    spdlog::debug("After resynchronization there were {} non-indicative factors", metric_resync_not_indicative);
     spdlog::debug("{} factors were resynchronized", metric_resync);
     spdlog::debug("Resynchronization of factors took {:.3} seconds", metric_resync_time);
     
