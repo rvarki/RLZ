@@ -68,6 +68,7 @@ class RLZ_CHAR_SORT
         size_t metric_factor_size = 0;  
         size_t metric_boundary_hits = 0;
         size_t metric_suffix_comps = 0;
+        double metric_avg_boundary_per_comp = 0;
         size_t metric_interval_hits = 0;
         size_t metric_backbone_hits = 0;
         size_t metric_indicative = 0;
@@ -118,7 +119,7 @@ RLZ_CHAR_SORT<int_t>::RLZ_CHAR_SORT(const std::string ref_file, const std::strin
     ref.close();
 
     auto sw_convert_elapsed = sw_convert.elapsed();
-    spdlog::debug("Finished reading reference file in {:.3} seconds", sw_convert_elapsed.count());
+    spdlog::debug("Finished reading reference file in {:.3f} seconds", sw_convert_elapsed.count());
     
     spdlog::debug("Constructing ISA, LCP, and RMQ from reference");
     spdlog::stopwatch sw_build;
@@ -128,7 +129,7 @@ RLZ_CHAR_SORT<int_t>::RLZ_CHAR_SORT(const std::string ref_file, const std::strin
     lcp_rmq = sdsl::rmq_succinct_sada<>(&lcp_ref);
 
     auto sw_build_elapsed = sw_build.elapsed();
-    spdlog::debug("Finished building data structures in {:.3} seconds", sw_build_elapsed.count());
+    spdlog::debug("Finished building data structures in {:.3f} seconds", sw_build_elapsed.count());
     
     spdlog::debug("Reading in RLZ parse");
     spdlog::stopwatch sw_parse;
@@ -158,7 +159,7 @@ RLZ_CHAR_SORT<int_t>::RLZ_CHAR_SORT(const std::string ref_file, const std::strin
     spdlog::debug("The RLZ parse represents {} characters", metric_text_size);
 
     auto sw_parse_elapsed = sw_parse.elapsed();
-    spdlog::debug("Finished reading RLZ parse in {:.3} seconds", sw_parse_elapsed.count());
+    spdlog::debug("Finished reading RLZ parse in {:.3f} seconds", sw_parse_elapsed.count());
 }
 
 /**
@@ -243,6 +244,7 @@ bool RLZ_CHAR_SORT<int_t>::compare_suffixes(const SortableSuffix& a, const Sorta
         spdlog::trace("Comparing Factor A: ({},{}) with Factor B: ({},{})", pa, la, pb, lb);
 
         int_t k = get_lce(pa, pb);
+        metric_boundary_hits++;
 
         spdlog::trace("LCE value: {} ---- min len: {}", k, std::min(la,lb));
 
@@ -281,6 +283,7 @@ bool RLZ_CHAR_SORT<int_t>::compare_suffixes(const SortableSuffix& a, const Sorta
             
             if (factor_ranks != nullptr && skip_a == 0 && skip_b == 0) {
                 spdlog::trace("Can use complete factor shortcut to finish comparison");
+                metric_backbone_hits++;
 
                 // Handle end-of-text boundaries
                 if (idx_a >= rlz_factors.size() && idx_b >= rlz_factors.size()) {
@@ -577,10 +580,10 @@ std::vector<typename RLZ_CHAR_SORT<int_t>::SortableSuffix> RLZ_CHAR_SORT<int_t>:
     spdlog::debug("After resynchronization there were {} indicative factors", metric_resync_indicative);
     spdlog::debug("After resynchronization there were {} non-indicative factors", metric_resync_not_indicative);
     spdlog::debug("{} factors were resynchronized", metric_resync);
-    spdlog::debug("Resynchronization of factors took {:.3} seconds", metric_resync_time);
+    spdlog::debug("Resynchronization of factors took {:.3f} seconds", metric_resync_time);
 
     metric_preprocess_time = sw_preprocess.elapsed().count();
-    spdlog::info("Finished generating all character-level suffixes in {:.3} seconds", metric_preprocess_time);
+    spdlog::info("Finished generating all character-level suffixes in {:.3f} seconds", metric_preprocess_time);
 
     return all_suffixes;
 }
@@ -650,10 +653,10 @@ std::vector<typename RLZ_CHAR_SORT<int_t>::SortableSuffix> RLZ_CHAR_SORT<int_t>:
     spdlog::debug("After resynchronization there were {} indicative factors", metric_resync_indicative);
     spdlog::debug("After resynchronization there were {} non-indicative factors", metric_resync_not_indicative);
     spdlog::debug("{} factors were resynchronized", metric_resync);
-    spdlog::debug("Resynchronization of factors took {:.3} seconds", metric_resync_time);
+    spdlog::debug("Resynchronization of factors took {:.3f} seconds", metric_resync_time);
     
     metric_preprocess_time = sw_preprocess.elapsed().count();
-    spdlog::info("Finished generating all factor-level suffixes in {:.3} seconds", metric_preprocess_time);
+    spdlog::info("Finished generating all factor-level suffixes in {:.3f} seconds", metric_preprocess_time);
 
     return boundaries;
 }
@@ -678,6 +681,7 @@ void RLZ_CHAR_SORT<int_t>::sort_naive(bool apply_resync) {
     spdlog::stopwatch sw_sort;
 
     std::sort(all_suffixes.begin(), all_suffixes.end(), [&](const SortableSuffix& a, const SortableSuffix& b) {
+        metric_suffix_comps++;
         return compare_suffixes(a, b);
     });
 
@@ -685,7 +689,13 @@ void RLZ_CHAR_SORT<int_t>::sort_naive(bool apply_resync) {
     for(const auto& suf : all_suffixes) sa_T.push_back(suf.id);
 
     metric_sort_time = sw_sort.elapsed().count();
-    spdlog::info("Naive Sort completed in {:.3} seconds", metric_sort_time);
+    spdlog::debug("Number of suffix comparison performed: {}", metric_suffix_comps);
+    spdlog::debug("Number of comparisons resolved with LCP-intervals: {}", metric_interval_hits);
+    spdlog::debug("Number of comparisons resolved with complete factor backbone: {}", metric_backbone_hits);
+    spdlog::debug("Number of LCE queries performed during sorting: {}", metric_boundary_hits);
+    metric_avg_boundary_per_comp = static_cast<double>(metric_boundary_hits) / static_cast<double>(metric_suffix_comps);
+    spdlog::debug("Average number of LCE queries per suffix comparison: {:.3f}", metric_avg_boundary_per_comp);
+    spdlog::info("Naive Sort completed in {:.3f} seconds", metric_sort_time);
 }
 
 /**
@@ -708,9 +718,16 @@ void RLZ_CHAR_SORT<int_t>::sort_lcp_interval(bool apply_resync) {
     spdlog::stopwatch sw_sort;
 
     std::sort(all_suffixes.begin(), all_suffixes.end(), [&](const SortableSuffix& a, const SortableSuffix& b) {
+        metric_suffix_comps++;
         // The Disjoint Interval Shortcut (O(1) resolution)
-        if (a.sa_range.second < b.sa_range.first) return true;
-        if (b.sa_range.second < a.sa_range.first) return false;
+        if (a.sa_range.second < b.sa_range.first) {
+            metric_interval_hits++;
+            return true;
+        }
+        if (b.sa_range.second < a.sa_range.first) {
+            metric_interval_hits++;
+            return false;
+        }
 
         // The Overlap Fallback (LCE Evaluation)
         return compare_suffixes(a, b);
@@ -720,7 +737,13 @@ void RLZ_CHAR_SORT<int_t>::sort_lcp_interval(bool apply_resync) {
     for(const auto& suf : all_suffixes) sa_T.push_back(suf.id);
 
     metric_sort_time = sw_sort.elapsed().count();
-    spdlog::info("LCP Interval Sort completed in {:.3} seconds", metric_sort_time);
+    spdlog::debug("Number of suffix comparison performed: {}", metric_suffix_comps);
+    spdlog::debug("Number of comparisons resolved with LCP-intervals: {}", metric_interval_hits);
+    spdlog::debug("Number of comparisons resolved with complete factor backbone: {}", metric_backbone_hits);
+    spdlog::debug("Number of LCE queries performed during sorting: {}", metric_boundary_hits);
+    metric_avg_boundary_per_comp = static_cast<double>(metric_boundary_hits) / static_cast<double>(metric_suffix_comps);
+    spdlog::debug("Average number of LCE queries per suffix comparison: {:.3f}", metric_avg_boundary_per_comp);
+    spdlog::info("LCP Interval Sort completed in {:.3f} seconds", metric_sort_time);
 }
 
 /**
@@ -752,10 +775,17 @@ void RLZ_CHAR_SORT<int_t>::sort_induced(bool apply_resync) {
     spdlog::stopwatch sw_sort;
 
     // Sort the complete factor suffixes first since they are the most likely to be indicative
-    std::sort(complete_bin.begin(), complete_bin.end(), [&](const SortableSuffix& a, const SortableSuffix& b) {        
+    std::sort(complete_bin.begin(), complete_bin.end(), [&](const SortableSuffix& a, const SortableSuffix& b) {
+        metric_suffix_comps++;        
         // The Disjoint Interval Shortcut (O(1) resolution)
-        if (a.sa_range.second < b.sa_range.first) return true;
-        if (b.sa_range.second < a.sa_range.first) return false;
+        if (a.sa_range.second < b.sa_range.first) {
+            metric_interval_hits++;
+            return true;
+        }
+        if (b.sa_range.second < a.sa_range.first) {
+            metric_interval_hits++;
+            return false;
+        }
 
         // The Overlap Fallback (LCE Evaluation)
         return compare_suffixes(a, b);
@@ -770,9 +800,16 @@ void RLZ_CHAR_SORT<int_t>::sort_induced(bool apply_resync) {
     // Sort the incomplete factors suffixes using the sorted complete factor suffixes knowledge
     // Note this speedup only occurs if two factors are fully consumed at the same time
     std::sort(incomplete_bin.begin(), incomplete_bin.end(), [&](const SortableSuffix& a, const SortableSuffix& b) {
+        metric_suffix_comps++;
         // The Disjoint Interval Shortcut (O(1) resolution)
-        if (a.sa_range.second < b.sa_range.first) return true;
-        if (b.sa_range.second < a.sa_range.first) return false;
+        if (a.sa_range.second < b.sa_range.first) {
+            metric_interval_hits++;
+            return true;
+        }
+        if (b.sa_range.second < a.sa_range.first) {
+            metric_interval_hits++;
+            return false;
+        }
 
         // The Overlap Fallback (LCE Evaluation)
         return compare_suffixes(a, b, &factor_ranks);
@@ -812,7 +849,13 @@ void RLZ_CHAR_SORT<int_t>::sort_induced(bool apply_resync) {
     while (j < incomplete_bin.size()) sa_T.push_back(incomplete_bin[j++].id);
 
     metric_sort_time = sw_sort.elapsed().count();
-    spdlog::info("Induced Sort completed in {:.3} seconds", metric_sort_time);
+    spdlog::debug("Number of suffix comparison performed: {}", metric_suffix_comps);
+    spdlog::debug("Number of comparisons resolved with LCP-intervals: {}", metric_interval_hits);
+    spdlog::debug("Number of comparisons resolved with complete factor backbone: {}", metric_backbone_hits);
+    spdlog::debug("Number of LCE queries performed during sorting: {}", metric_boundary_hits);
+    metric_avg_boundary_per_comp = static_cast<double>(metric_boundary_hits) / static_cast<double>(metric_suffix_comps);
+    spdlog::debug("Average number of LCE queries per suffix comparison: {:.3f}", metric_avg_boundary_per_comp);
+    spdlog::info("Induced Sort completed in {:.3f} seconds", metric_sort_time);
 }
 
 /**
@@ -832,9 +875,16 @@ void RLZ_CHAR_SORT<int_t>::sort_factors_only(bool apply_resync) {
     spdlog::stopwatch sw_sort;
 
     std::sort(complete_bin.begin(), complete_bin.end(), [&](const SortableSuffix& a, const SortableSuffix& b) {
+        metric_suffix_comps++;
         // The Disjoint Interval Shortcut (O(1) resolution)
-        if (a.sa_range.second < b.sa_range.first) return true;
-        if (b.sa_range.second < a.sa_range.first) return false;
+        if (a.sa_range.second < b.sa_range.first) {
+            metric_interval_hits++;
+            return true;
+        }
+        if (b.sa_range.second < a.sa_range.first) {
+            metric_interval_hits++;
+            return false;
+        }
         
         // The Overlap Fallback (LCE Evaluation)
         return compare_suffixes(a, b);
@@ -846,7 +896,13 @@ void RLZ_CHAR_SORT<int_t>::sort_factors_only(bool apply_resync) {
     }
 
     metric_sort_time = sw_sort.elapsed().count();
-    spdlog::info("Factor-Only Sort completed in {:.3} seconds", metric_sort_time);
+    spdlog::debug("Number of suffix comparison performed: {}", metric_suffix_comps);
+    spdlog::debug("Number of comparisons resolved with LCP-intervals: {}", metric_interval_hits);
+    spdlog::debug("Number of comparisons resolved with complete factor backbone: {}", metric_backbone_hits);
+    spdlog::debug("Number of LCE queries performed during sorting: {}", metric_boundary_hits);
+    metric_avg_boundary_per_comp = static_cast<double>(metric_boundary_hits) / static_cast<double>(metric_suffix_comps);
+    spdlog::debug("Average number of LCE queries per suffix comparison: {:.3f}", metric_avg_boundary_per_comp);
+    spdlog::info("Factor-Only Sort completed in {:.3f} seconds", metric_sort_time);
 }
 
 
