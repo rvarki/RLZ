@@ -63,7 +63,9 @@ class RLZ_CHAR_SORT
         RLZ_Factor apply_resynchronization(const RLZ_Factor& f_i, const RLZ_Factor& f_next);
         std::vector<SortableSuffix> generate_all_suffixes(bool apply_resync);
         std::vector<SortableSuffix> generate_factor_boundaries(bool apply_resync);
-        // Metrics to record throughout  
+        // Metrics to record throughout
+        size_t metric_text_size = 0;
+        size_t metric_factor_size = 0;  
         size_t metric_boundary_hits = 0;
         size_t metric_suffix_comps = 0;
         size_t metric_interval_hits = 0;
@@ -141,6 +143,8 @@ RLZ_CHAR_SORT<int_t>::RLZ_CHAR_SORT(const std::string ref_file, const std::strin
 
     parse.read(reinterpret_cast<char*>(&num_pairs), sizeof(num_pairs));
 
+    metric_factor_size = num_pairs;
+
     spdlog::debug("The RLZ parse contains {} factors", num_pairs);
 
     uintmax_t parse_size = std::filesystem::file_size(parse_file);
@@ -148,6 +152,10 @@ RLZ_CHAR_SORT<int_t>::RLZ_CHAR_SORT(const std::string ref_file, const std::strin
 
     rlz_factors.resize(num_pairs);
     parse.read(reinterpret_cast<char*>(rlz_factors.data()), num_pairs * sizeof(RLZ_Factor));
+
+    for (auto factor : rlz_factors){ metric_text_size += factor.l; }
+
+    spdlog::debug("The RLZ parse represents {} characters", metric_text_size);
 
     auto sw_parse_elapsed = sw_parse.elapsed();
     spdlog::debug("Finished reading RLZ parse in {:.3} seconds", sw_parse_elapsed.count());
