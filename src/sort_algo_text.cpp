@@ -56,7 +56,7 @@ TEXT_SORT::TEXT_SORT(const std::string seq_file)
     seq.close();
 
     auto sw_convert_elapsed = sw_convert.elapsed();
-    spdlog::debug("Finished reading sequence file in {:.3} seconds", sw_convert_elapsed.count());
+    spdlog::debug("Finished reading sequence file in {:.3f} seconds", sw_convert_elapsed.count());
 }
 
 /**
@@ -95,7 +95,7 @@ bool TEXT_SORT::comparator(std::string_view a, std::string_view b, size_t& char_
 
 
 /**
- * @brief Creates the Suffix Array of a text with naive method using custom comparison operator
+ * @brief Creates the suffix array of a text with naive method using custom comparison operator
  * 
  * Sorts the suffixes using a custom comparison operator. Worst case is O(N^2log(N)) since 
  * there are O(Nlog(N)) comparisons and each comparison takes O(N) time worst case. There 
@@ -106,52 +106,48 @@ bool TEXT_SORT::comparator(std::string_view a, std::string_view b, size_t& char_
  * @param [in] json [bool] Whether to produce json lines file containing sort stats
  */
 
-void TEXT_SORT::buildSuffixArray(const std::string seq_file, bool json) 
+void TEXT_SORT::build_sa(const std::string seq_file, bool json) 
 {
     spdlog::stopwatch sw_sort;
 
-    size_t n = seq_content.size();
-    suffix_array.resize(n);
+    metric_text_size = seq_content.size();
+    suffix_array.resize(metric_text_size);
     
     // Fill the SA with the indices to start
-    for (size_t i = 0; i < n; i++) {
+    for (size_t i = 0; i < metric_text_size; i++) {
         suffix_array[i] = i;
     }
 
     // Read only view into original text
     std::string_view view(seq_content);
 
-    size_t total_suffix_comparisons = 0;
-    size_t total_char_comparisons = 0;
-
     std::sort(suffix_array.begin(), suffix_array.end(), [&](size_t a, size_t b) {
-        total_suffix_comparisons++; 
-        return comparator(view.substr(a), view.substr(b), total_char_comparisons); 
+        metric_suffix_comps++; 
+        return comparator(view.substr(a), view.substr(b), metric_char_hits); 
     });
 
-    auto sw_sort_elapsed = sw_sort.elapsed();
 
-    double sort_time = static_cast<double>(sw_sort_elapsed.count());
-    double avg_char_per_comparison = static_cast<double>(total_char_comparisons) / static_cast<double>(total_suffix_comparisons);
+    metric_sort_time = sw_sort.elapsed().count();
+    metric_avg_char_per_comp = static_cast<double>(metric_char_hits) / static_cast<double>(metric_suffix_comps);
 
-    spdlog::debug("Total number of suffix comparisons: {}", total_suffix_comparisons);
-    spdlog::debug("Total number of character comparisons: {}", total_char_comparisons);
-    spdlog::debug("Average number of characters compared per suffix comparison: {:.3}", avg_char_per_comparison);
+    spdlog::debug("Number of suffix comparison performed: {}", metric_suffix_comps);
+    spdlog::debug("Number of character comparisons performed during sorting: {}", metric_char_hits);
+    spdlog::debug("Average number of characters compared per suffix comparison: {:.3f}", metric_avg_char_per_comp);
 
-    spdlog::info("Finished sorting suffixes in {:.3} seconds", sort_time);
+    spdlog::info("Finished sorting text suffixes in {:.3f} seconds", metric_sort_time);
 
     // If outputting JSON lines is requested
-    if (json) { write_sort_benchmark_jsonl(seq_file, "Text", n, sort_time, total_suffix_comparisons, total_char_comparisons, avg_char_per_comparison); }
+    if (json) { write_sort_benchmark_jsonl(seq_file, "Text", metric_text_size, metric_sort_time, metric_suffix_comps, metric_char_hits, metric_avg_char_per_comp); }
 }
 
 
 /**
- * @brief Writes the Suffix Array of the text to file
+ * @brief Writes the suffix array of the text to file
  * 
  * @param [in] seq_file [string] The sequence file name is used to create output filename
  */
 
-void TEXT_SORT::writeSuffixArray(const std::string seq_file)
+void TEXT_SORT::write_sa(const std::string seq_file)
 {
     spdlog::stopwatch sw_write;
 
@@ -170,5 +166,5 @@ void TEXT_SORT::writeSuffixArray(const std::string seq_file)
     out.close();
 
     auto sw_write_elapsed = sw_write.elapsed();
-    spdlog::info("Finished writing suffix array to file in {:.3} seconds", sw_write_elapsed.count());
+    spdlog::info("Finished writing suffix array to file in {:.3f} seconds", sw_write_elapsed.count());
 }

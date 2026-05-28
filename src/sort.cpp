@@ -42,8 +42,8 @@ void run_rlz_char_sort(const std::string& ref_file, const std::string& parse_fil
 void run_text_sort(const std::string& seq_file, bool json)
 {
     TEXT_SORT main_parser(seq_file);
-    main_parser.buildSuffixArray(seq_file, json);
-    main_parser.writeSuffixArray(seq_file);
+    main_parser.build_sa(seq_file, json);
+    main_parser.write_sa(seq_file);
 }
 
 

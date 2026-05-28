@@ -22,8 +22,16 @@ class TEXT_SORT
         ~TEXT_SORT();
 
         bool comparator(std::string_view a, std::string_view b, size_t& char_count);
-        void buildSuffixArray(const std::string seq_file, bool json);
-        void writeSuffixArray(const std::string seq_file);
+        void build_sa(const std::string seq_file, bool json);
+        void write_sa(const std::string seq_file);
+    
+    private:
+        // Metrics to record throughout
+        size_t metric_text_size = 0;
+        size_t metric_char_hits = 0;
+        size_t metric_suffix_comps = 0;
+        double metric_sort_time = 0;
+        double metric_avg_char_per_comp = 0;
 };
 
 #endif  // SORT_ALGO_TEXT_H
