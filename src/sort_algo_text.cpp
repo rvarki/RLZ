@@ -103,10 +103,10 @@ bool TEXT_SORT::comparator(std::string_view a, std::string_view b, size_t& char_
  * sorting time with RLZ version, therefore an inefficient but compatible metho with RLZ was chosen.
  * 
  * @param [in] seq_file [string] The path to the sequence file
- * @param [in] csv [bool] Whether to produce csv containing sort stats
+ * @param [in] json [bool] Whether to produce json lines file containing sort stats
  */
 
-void TEXT_SORT::buildSuffixArray(const std::string seq_file, bool csv) 
+void TEXT_SORT::buildSuffixArray(const std::string seq_file, bool json) 
 {
     spdlog::stopwatch sw_sort;
 
@@ -140,8 +140,8 @@ void TEXT_SORT::buildSuffixArray(const std::string seq_file, bool csv)
 
     spdlog::info("Finished sorting suffixes in {:.3} seconds", sort_time);
 
-    // If outputting CSV is requested
-    if (csv) { write_sort_benchmark_csv(seq_file, "Text", n, sort_time, total_suffix_comparisons, total_char_comparisons, avg_char_per_comparison); }
+    // If outputting JSON lines is requested
+    if (json) { write_sort_benchmark_jsonl(seq_file, "Text", n, sort_time, total_suffix_comparisons, total_char_comparisons, avg_char_per_comparison); }
 }
 
 

@@ -16,13 +16,13 @@
 #include <limits>
 
 template <typename int_t>
-void run_rlz_bit_sort(const std::string& ref_file, const std::string& parse_file, bool naive, bool interval, bool induced, bool only_factor, bool resync, bool csv)
+void run_rlz_bit_sort(const std::string& ref_file, const std::string& parse_file, bool naive, bool interval, bool induced, bool only_factor, bool resync, bool json)
 {
     spdlog::info("Sorting is currently not supported for bit-level RLZ parses");
 }
 
 template <typename int_t>
-void run_rlz_char_sort(const std::string& ref_file, const std::string& parse_file, bool naive, bool interval, bool induced, bool only_factor, bool resync, bool csv)
+void run_rlz_char_sort(const std::string& ref_file, const std::string& parse_file, bool naive, bool interval, bool induced, bool only_factor, bool resync, bool json)
 {
     RLZ_CHAR_SORT<int_t> main_parser(ref_file, parse_file);
 
@@ -39,10 +39,10 @@ void run_rlz_char_sort(const std::string& ref_file, const std::string& parse_fil
 }
 
 
-void run_text_sort(const std::string& seq_file, bool csv)
+void run_text_sort(const std::string& seq_file, bool json)
 {
     TEXT_SORT main_parser(seq_file);
-    main_parser.buildSuffixArray(seq_file, csv);
+    main_parser.buildSuffixArray(seq_file, json);
     main_parser.writeSuffixArray(seq_file);
 }
 
@@ -60,7 +60,7 @@ int main(int argc, char **argv)
     bool rlz_repair = false;
     bool match_limit; // If max_len was set, we do not know whether the factors are maximal
     int verbosity = 0;
-    bool csv = false; // Write out CSV of stats
+    bool json = false; // Write out stats in JSON lines format
     bool resync = false; // Apply resycnronization to the RLZ parse
 
     // Compression groups for RLZ
@@ -88,14 +88,14 @@ int main(int argc, char **argv)
 
     rlz_cmd->add_flag("--resync", resync, "Apply resynchronization prior to sorting");
     // rlz_cmd->add_flag("--limit", match_limit, "Set if a match limit was specified during compression");
-    rlz_cmd->add_flag("--csv", csv, "Output CSV file containing sorting statistics");
+    rlz_cmd->add_flag("--json", json, "Output JSON Lines file containing sorting statistics");
     rlz_cmd->add_option("-v,--verbosity", verbosity, "Set verbosity level (0 = info, 1 = debug, 2 = trace)")->check(CLI::Range(0, 2))->default_val(0);
     
     // Text sorting
     auto* text_cmd = app.add_subcommand("text", "Sorting suffixes directly from text");
     text_cmd->add_option("-s,--seq", seq_file, "Sequence file to sort")->required();
     // text_cmd->add_option("-o,--output", parse_file, "Output prefix")->required();
-    text_cmd->add_flag("--csv", csv, "Output CSV file containing sorting statistics");
+    text_cmd->add_flag("--json", json, "Output JSON Lines file containing sorting statistics");
     text_cmd->add_option("-v,--verbosity", verbosity, "Set verbosity level (0 = info, 1 = debug, 2 = trace)")->check(CLI::Range(0, 2))->default_val(0);
 
     // Choose between rlz or text sorting
@@ -106,8 +106,8 @@ int main(int argc, char **argv)
 
     // Footer Updates
     app.footer("Example usage:\n"
-               "  ./sort rlz -r reference.fasta -p sequence.fasta.rlz [--bit] [--repair] [--naive] [--interval] [--induced] [--factors-only] [--resync] [--csv]\n"
-               "  ./sort text -s sequence.fasta [--csv]\n");
+               "  ./sort rlz -r reference.fasta -p sequence.fasta.rlz [--bit] [--repair] [--naive] [--interval] [--induced] [--factors-only] [--resync] [--json]\n"
+               "  ./sort text -s sequence.fasta [--json]\n");
 
     CLI11_PARSE(app, argc, argv);
 
@@ -137,7 +137,7 @@ int main(int argc, char **argv)
             {
                 if (ref_size_bits < std::numeric_limits<int>::max()){
                     spdlog::info("Assuming entries encoded with int");
-                    run_rlz_bit_sort<int>(ref_file, parse_file, naive, interval, induced, only_factor, resync, csv);
+                    run_rlz_bit_sort<int>(ref_file, parse_file, naive, interval, induced, only_factor, resync, json);
                 }
                 else{
                     spdlog::error("Determined reference size is too large! Choose a smaller reference file.");
@@ -146,10 +146,10 @@ int main(int argc, char **argv)
                 return 0;
             }
             // Entry size is determined by the size of the reference
-            if (ref_size_bits <= UINT8_MAX) { spdlog::info("Assuming entries were encoded with uint8_t"); run_rlz_bit_sort<uint8_t>(ref_file, parse_file, naive, interval, induced, only_factor, resync, csv); }
-            else if (ref_size_bits <= UINT16_MAX) { spdlog::info("Assuming entries were encoded with uint16_t"); run_rlz_bit_sort<uint16_t>(ref_file, parse_file, naive, interval, induced, only_factor, resync, csv); }
-            else if (ref_size_bits <= UINT32_MAX) { spdlog::info("Assuming entries were encoded with uint32_t"); run_rlz_bit_sort<uint32_t>(ref_file, parse_file, naive, interval, induced, only_factor, resync, csv); }
-            else if (ref_size_bits <= UINT64_MAX) { spdlog::info("Assuming entries were encoded with uint64_t"); run_rlz_bit_sort<uint64_t>(ref_file, parse_file, naive, interval, induced, only_factor, resync, csv); }
+            if (ref_size_bits <= UINT8_MAX) { spdlog::info("Assuming entries were encoded with uint8_t"); run_rlz_bit_sort<uint8_t>(ref_file, parse_file, naive, interval, induced, only_factor, resync, json); }
+            else if (ref_size_bits <= UINT16_MAX) { spdlog::info("Assuming entries were encoded with uint16_t"); run_rlz_bit_sort<uint16_t>(ref_file, parse_file, naive, interval, induced, only_factor, resync, json); }
+            else if (ref_size_bits <= UINT32_MAX) { spdlog::info("Assuming entries were encoded with uint32_t"); run_rlz_bit_sort<uint32_t>(ref_file, parse_file, naive, interval, induced, only_factor, resync, json); }
+            else if (ref_size_bits <= UINT64_MAX) { spdlog::info("Assuming entries were encoded with uint64_t"); run_rlz_bit_sort<uint64_t>(ref_file, parse_file, naive, interval, induced, only_factor, resync, json); }
             else{
                 spdlog::error("Determined reference size is too large! Choose a smaller reference file.");
                 exit(1);
@@ -170,7 +170,7 @@ int main(int argc, char **argv)
             {
                 if (ref_size < std::numeric_limits<int>::max()){
                     spdlog::info("Assuming entries encoded with int");
-                    run_rlz_char_sort<int>(ref_file, parse_file, naive, interval, induced, only_factor, resync, csv);
+                    run_rlz_char_sort<int>(ref_file, parse_file, naive, interval, induced, only_factor, resync, json);
                 }
                 else{
                     spdlog::error("Determined reference size is too large! Choose a smaller reference file.");
@@ -179,10 +179,10 @@ int main(int argc, char **argv)
                 return 0;
             }
             // Entries is determined by the size of the reference
-            if (ref_size <= UINT8_MAX) { spdlog::info("Assuming entries were encoded with uint8_t"); run_rlz_char_sort<uint8_t>(ref_file, parse_file, naive, interval, induced, only_factor, resync, csv); }
-            else if (ref_size <= UINT16_MAX) { spdlog::info("Assuming entries were encoded with uint16_t"); run_rlz_char_sort<uint16_t>(ref_file, parse_file, naive, interval, induced, only_factor, resync, csv); }
-            else if (ref_size <= UINT32_MAX) { spdlog::info("Assuming entries were encoded with uint32_t"); run_rlz_char_sort<uint32_t>(ref_file, parse_file, naive, interval, induced, only_factor, resync, csv); }
-            else if (ref_size <= UINT64_MAX) { spdlog::info("Assuming entries were encoded with uint64_t"); run_rlz_char_sort<uint64_t>(ref_file, parse_file, naive, interval, induced, only_factor, resync, csv); }
+            if (ref_size <= UINT8_MAX) { spdlog::info("Assuming entries were encoded with uint8_t"); run_rlz_char_sort<uint8_t>(ref_file, parse_file, naive, interval, induced, only_factor, resync, json); }
+            else if (ref_size <= UINT16_MAX) { spdlog::info("Assuming entries were encoded with uint16_t"); run_rlz_char_sort<uint16_t>(ref_file, parse_file, naive, interval, induced, only_factor, resync, json); }
+            else if (ref_size <= UINT32_MAX) { spdlog::info("Assuming entries were encoded with uint32_t"); run_rlz_char_sort<uint32_t>(ref_file, parse_file, naive, interval, induced, only_factor, resync, json); }
+            else if (ref_size <= UINT64_MAX) { spdlog::info("Assuming entries were encoded with uint64_t"); run_rlz_char_sort<uint64_t>(ref_file, parse_file, naive, interval, induced, only_factor, resync, json); }
             else{
                 spdlog::error("Determined reference size is too large! Choose a smaller reference file.");
                 std::exit(1);
@@ -194,7 +194,7 @@ int main(int argc, char **argv)
     else if (text_cmd->parsed())
     {
         spdlog::info("Text sorting enabled");
-        run_text_sort(seq_file, csv);
+        run_text_sort(seq_file, json);
         return 0;
     }
     else{ 

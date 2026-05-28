@@ -10,12 +10,16 @@
 
 #include <string>
 
-void write_sort_benchmark_csv(const std::string& input_path, 
-                         const std::string& config_name,
-                         size_t text_size,
-                         double sort_time,
-                         size_t suffix_comps, 
-                         size_t unit_comps,
-                         double avg_unit_per_comp);
+void write_sort_benchmark_jsonl(const std::string& input_path, 
+                                const std::string& config_name,
+                                size_t text_size,
+                                double sort_time,
+                                size_t suffix_comps, 
+                                size_t unit_comps,
+                                double avg_unit_per_comp,
+                                bool is_rlz = false,
+                                size_t total_factors = 0,
+                                size_t interval_hits = 0,
+                                size_t backbone_hits = 0);
 
 #endif
