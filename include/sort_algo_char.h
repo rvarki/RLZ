@@ -542,6 +542,8 @@ std::vector<typename RLZ_CHAR_SORT<int_t>::SortableSuffix> RLZ_CHAR_SORT<int_t>:
             suf.first_factor = effective_first;
             suf.borrowed = static_cast<int_t>(effective_first.l - orig_l);
 
+            if (suf.borrowed > 0) { metric_resync++; } 
+
             // Only pay for the RMQ binary search if the factor is NON-indicative
             if (suf.is_ind) {
                 int_t rank = csa_ref.isa[suf.first_factor.p];
@@ -554,6 +556,7 @@ std::vector<typename RLZ_CHAR_SORT<int_t>::SortableSuffix> RLZ_CHAR_SORT<int_t>:
         }
     }
     
+    spdlog::debug("{} factors were resynchronized", metric_resync);
     spdlog::debug("Resynchronization of factors took {:.3} seconds", metric_resync_time);
 
     metric_preprocess_time = sw_preprocess.elapsed().count();
@@ -598,6 +601,8 @@ std::vector<typename RLZ_CHAR_SORT<int_t>::SortableSuffix> RLZ_CHAR_SORT<int_t>:
         
         suf.first_factor = effective_first;
         suf.borrowed = static_cast<int_t>(effective_first.l - orig_l);
+
+        if (suf.borrowed > 0) { metric_resync++; } 
         
         //  Cache the Suffix Array interval efficiently
         if (suf.is_ind) {
@@ -612,6 +617,7 @@ std::vector<typename RLZ_CHAR_SORT<int_t>::SortableSuffix> RLZ_CHAR_SORT<int_t>:
         boundaries.push_back(suf);
     }
 
+    spdlog::debug("{} factors were resynchronized", metric_resync);
     spdlog::debug("Resynchronization of factors took {:.3} seconds", metric_resync_time);
     
     metric_preprocess_time = sw_preprocess.elapsed().count();
