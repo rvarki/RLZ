@@ -63,6 +63,19 @@ class RLZ_CHAR_SORT
         RLZ_Factor apply_resynchronization(const RLZ_Factor& f_i, const RLZ_Factor& f_next);
         std::vector<SortableSuffix> generate_all_suffixes(bool apply_resync);
         std::vector<SortableSuffix> generate_factor_boundaries(bool apply_resync);
+        // Metrics to record throughout  
+        size_t metric_boundary_hits = 0;
+        size_t metric_suffix_comps = 0;
+        size_t metric_interval_hits = 0;
+        size_t metric_backbone_hits = 0;
+        size_t metric_indicative = 0;
+        size_t metric_not_indicative = 0;
+        size_t metric_resync = 0;
+        size_t metric_resync_indicative = 0;
+        size_t metric_resync_not_indicative = 0;
+        double metric_sort_time = 0;
+        double metric_preprocess_time = 0;
+        double metric_resync_time = 0;
 };
 
 /**
@@ -482,7 +495,8 @@ typename RLZ_CHAR_SORT<int_t>::RLZ_Factor RLZ_CHAR_SORT<int_t>::apply_resynchron
 
 template<typename int_t>
 std::vector<typename RLZ_CHAR_SORT<int_t>::SortableSuffix> RLZ_CHAR_SORT<int_t>::generate_all_suffixes(bool apply_resync) {
-    spdlog::debug("Generating all character-level suffixes (Resync: {})", apply_resync);
+    spdlog::info("Generating all character-level suffixes (Resync: {})", apply_resync);
+    spdlog::stopwatch sw_preprocess;
     
     // Get number of suffixes
     size_t total_suffixes = 0;
@@ -535,6 +549,9 @@ std::vector<typename RLZ_CHAR_SORT<int_t>::SortableSuffix> RLZ_CHAR_SORT<int_t>:
         }
     }
     
+    metric_preprocess_time = sw_preprocess.elapsed().count();
+    spdlog::info("Finished generating all character-level suffixes in {:.3} seconds", metric_preprocess_time);
+
     return all_suffixes;
 }
 
@@ -547,8 +564,9 @@ std::vector<typename RLZ_CHAR_SORT<int_t>::SortableSuffix> RLZ_CHAR_SORT<int_t>:
  */
 template<typename int_t>
 std::vector<typename RLZ_CHAR_SORT<int_t>::SortableSuffix> RLZ_CHAR_SORT<int_t>::generate_factor_boundaries(bool apply_resync) {
-    spdlog::debug("Generating ONLY factor boundaries (Resync enabled: {})", apply_resync);
-    
+    spdlog::info("Generating ONLY factor boundaries (Resync enabled: {})", apply_resync);
+    spdlog::stopwatch sw_preprocess;
+
     std::vector<SortableSuffix> boundaries;
     boundaries.reserve(rlz_factors.size());
     
@@ -587,6 +605,9 @@ std::vector<typename RLZ_CHAR_SORT<int_t>::SortableSuffix> RLZ_CHAR_SORT<int_t>:
         boundaries.push_back(suf);
     }
     
+    metric_preprocess_time = sw_preprocess.elapsed().count();
+    spdlog::info("Finished generating all factor-level suffixes in {:.3} seconds", metric_preprocess_time);
+
     return boundaries;
 }
 
@@ -601,10 +622,13 @@ std::vector<typename RLZ_CHAR_SORT<int_t>::SortableSuffix> RLZ_CHAR_SORT<int_t>:
 
 template<typename int_t>
 void RLZ_CHAR_SORT<int_t>::sort_naive(bool apply_resync) {
+
+    // Preprocessing 
+    std::vector<SortableSuffix> all_suffixes = generate_all_suffixes(apply_resync);
+
+    // Actual Sorting Logic
     spdlog::info("Executing Naive Sort (Resync: {})", apply_resync);
     spdlog::stopwatch sw_sort;
-    
-    std::vector<SortableSuffix> all_suffixes = generate_all_suffixes(apply_resync);
 
     std::sort(all_suffixes.begin(), all_suffixes.end(), [&](const SortableSuffix& a, const SortableSuffix& b) {
         return compare_suffixes(a, b);
@@ -613,7 +637,8 @@ void RLZ_CHAR_SORT<int_t>::sort_naive(bool apply_resync) {
     sa_T.reserve(all_suffixes.size());
     for(const auto& suf : all_suffixes) sa_T.push_back(suf.id);
 
-    spdlog::info("Naive Sort completed in {:.3} seconds", sw_sort.elapsed().count());
+    metric_sort_time = sw_sort.elapsed().count();
+    spdlog::info("Naive Sort completed in {:.3} seconds", metric_sort_time);
 }
 
 /**
@@ -627,10 +652,13 @@ void RLZ_CHAR_SORT<int_t>::sort_naive(bool apply_resync) {
 
 template<typename int_t>
 void RLZ_CHAR_SORT<int_t>::sort_lcp_interval(bool apply_resync) {
+
+    // Preprocessing
+    std::vector<SortableSuffix> all_suffixes = generate_all_suffixes(apply_resync);
+
+    // Actual Sorting Logic
     spdlog::info("Executing LCP Interval Sort (Resync: {})", apply_resync);
     spdlog::stopwatch sw_sort;
-    
-    std::vector<SortableSuffix> all_suffixes = generate_all_suffixes(apply_resync);
 
     std::sort(all_suffixes.begin(), all_suffixes.end(), [&](const SortableSuffix& a, const SortableSuffix& b) {
         // The Disjoint Interval Shortcut (O(1) resolution)
@@ -644,7 +672,8 @@ void RLZ_CHAR_SORT<int_t>::sort_lcp_interval(bool apply_resync) {
     sa_T.reserve(all_suffixes.size());
     for(const auto& suf : all_suffixes) sa_T.push_back(suf.id);
 
-    spdlog::info("LCP Interval Sort completed in {:.3} seconds", sw_sort.elapsed().count());
+    metric_sort_time = sw_sort.elapsed().count();
+    spdlog::info("LCP Interval Sort completed in {:.3} seconds", metric_sort_time);
 }
 
 /**
@@ -659,9 +688,8 @@ void RLZ_CHAR_SORT<int_t>::sort_lcp_interval(bool apply_resync) {
 
 template<typename int_t>
 void RLZ_CHAR_SORT<int_t>::sort_induced(bool apply_resync) {
-    spdlog::info("Executing Induced Sort (Resync: {})", apply_resync);
-    spdlog::stopwatch sw_sort;
-    
+
+    // Preprocessing
     std::vector<SortableSuffix> all_suffixes = generate_all_suffixes(apply_resync);
     
     std::vector<SortableSuffix> complete_bin;
@@ -671,6 +699,10 @@ void RLZ_CHAR_SORT<int_t>::sort_induced(bool apply_resync) {
         if (suf.id.offset == 0) complete_bin.push_back(suf);
         else incomplete_bin.push_back(suf);
     }
+
+    // Actual Sorting Logic
+    spdlog::info("Executing Induced Sort (Resync: {})", apply_resync);
+    spdlog::stopwatch sw_sort;
 
     // Sort the complete factor suffixes first since they are the most likely to be indicative
     std::sort(complete_bin.begin(), complete_bin.end(), [&](const SortableSuffix& a, const SortableSuffix& b) {        
@@ -732,7 +764,8 @@ void RLZ_CHAR_SORT<int_t>::sort_induced(bool apply_resync) {
     while (i < complete_bin.size()) sa_T.push_back(complete_bin[i++].id);
     while (j < incomplete_bin.size()) sa_T.push_back(incomplete_bin[j++].id);
 
-    spdlog::info("Induced Sort completed in {:.3} seconds", sw_sort.elapsed().count());
+    metric_sort_time = sw_sort.elapsed().count();
+    spdlog::info("Induced Sort completed in {:.3} seconds", metric_sort_time);
 }
 
 /**
@@ -743,11 +776,13 @@ void RLZ_CHAR_SORT<int_t>::sort_induced(bool apply_resync) {
  */
 template<typename int_t>
 void RLZ_CHAR_SORT<int_t>::sort_factors_only(bool apply_resync) {
+    
+    // Preprocessing
+    std::vector<SortableSuffix> complete_bin = generate_factor_boundaries(apply_resync);
+
+    // Actual Sorting Logic
     spdlog::info("Executing Factor-Only Sort (Resync flag: {})", apply_resync);
     spdlog::stopwatch sw_sort;
-    
-    // Pass the flag down to the generator
-    std::vector<SortableSuffix> complete_bin = generate_factor_boundaries(apply_resync);
 
     std::sort(complete_bin.begin(), complete_bin.end(), [&](const SortableSuffix& a, const SortableSuffix& b) {
         // The Disjoint Interval Shortcut (O(1) resolution)
@@ -763,7 +798,8 @@ void RLZ_CHAR_SORT<int_t>::sort_factors_only(bool apply_resync) {
         sa_T.push_back(suf.id);
     }
 
-    spdlog::info("Factor-Only Sort completed in {:.3} seconds", sw_sort.elapsed().count());
+    metric_sort_time = sw_sort.elapsed().count();
+    spdlog::info("Factor-Only Sort completed in {:.3} seconds", metric_sort_time);
 }
 
 
