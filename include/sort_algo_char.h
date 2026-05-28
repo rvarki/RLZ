@@ -401,6 +401,9 @@ std::pair<int_t, int_t> RLZ_CHAR_SORT<int_t>::get_sa_range(const RLZ_Factor& f) 
  */
 template<typename int_t>
 typename RLZ_CHAR_SORT<int_t>::RLZ_Factor RLZ_CHAR_SORT<int_t>::apply_resynchronization(const RLZ_Factor& f_i, const RLZ_Factor& f_next) {
+
+    spdlog::stopwatch sw_resync;
+
     std::pair<int_t, int_t> range_i = get_sa_range(f_i);
     
     // Safety check: if factor doesn't exist, return original
@@ -473,6 +476,8 @@ typename RLZ_CHAR_SORT<int_t>::RLZ_Factor RLZ_CHAR_SORT<int_t>::apply_resynchron
             }
         }
     }
+
+    metric_resync_time += sw_resync.elapsed().count();
     
     if (max_k > 0) {
         spdlog::trace("Resynchronization occured");
@@ -549,6 +554,8 @@ std::vector<typename RLZ_CHAR_SORT<int_t>::SortableSuffix> RLZ_CHAR_SORT<int_t>:
         }
     }
     
+    spdlog::debug("Resynchronization of factors took {:.3} seconds", metric_resync_time);
+
     metric_preprocess_time = sw_preprocess.elapsed().count();
     spdlog::info("Finished generating all character-level suffixes in {:.3} seconds", metric_preprocess_time);
 
@@ -604,6 +611,8 @@ std::vector<typename RLZ_CHAR_SORT<int_t>::SortableSuffix> RLZ_CHAR_SORT<int_t>:
         
         boundaries.push_back(suf);
     }
+
+    spdlog::debug("Resynchronization of factors took {:.3} seconds", metric_resync_time);
     
     metric_preprocess_time = sw_preprocess.elapsed().count();
     spdlog::info("Finished generating all factor-level suffixes in {:.3} seconds", metric_preprocess_time);
