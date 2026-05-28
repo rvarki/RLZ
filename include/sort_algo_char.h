@@ -70,7 +70,9 @@ class RLZ_CHAR_SORT
         size_t metric_suffix_comps = 0;
         double metric_avg_boundary_per_comp = 0;
         size_t metric_interval_hits = 0;
+        double interval_percentage = 0;
         size_t metric_backbone_hits = 0;
+        double backbone_percentage = 0;
         size_t metric_indicative = 0;
         size_t metric_not_indicative = 0;
         size_t metric_resync = 0;
@@ -690,8 +692,10 @@ void RLZ_CHAR_SORT<int_t>::sort_naive(bool apply_resync) {
 
     metric_sort_time = sw_sort.elapsed().count();
     spdlog::debug("Number of suffix comparison performed: {}", metric_suffix_comps);
-    spdlog::debug("Number of comparisons resolved with LCP-intervals: {}", metric_interval_hits);
-    spdlog::debug("Number of comparisons resolved with complete factor backbone: {}", metric_backbone_hits);
+    interval_percentage = (static_cast<double>(metric_interval_hits) / static_cast<double>(metric_suffix_comps)) * 100.0;
+    spdlog::debug("Number of comparisons resolved with LCP-intervals: {} ({:.2f}%)", metric_interval_hits, interval_percentage);
+    backbone_percentage = (static_cast<double>(metric_backbone_hits) / static_cast<double>(metric_suffix_comps)) * 100.0;
+    spdlog::debug("Number of comparisons resolved with complete factor backbone: {} ({:.2f}%)", metric_backbone_hits, backbone_percentage);
     spdlog::debug("Number of LCE queries performed during sorting: {}", metric_boundary_hits);
     metric_avg_boundary_per_comp = static_cast<double>(metric_boundary_hits) / static_cast<double>(metric_suffix_comps);
     spdlog::debug("Average number of LCE queries per suffix comparison: {:.3f}", metric_avg_boundary_per_comp);
@@ -738,8 +742,10 @@ void RLZ_CHAR_SORT<int_t>::sort_lcp_interval(bool apply_resync) {
 
     metric_sort_time = sw_sort.elapsed().count();
     spdlog::debug("Number of suffix comparison performed: {}", metric_suffix_comps);
-    spdlog::debug("Number of comparisons resolved with LCP-intervals: {}", metric_interval_hits);
-    spdlog::debug("Number of comparisons resolved with complete factor backbone: {}", metric_backbone_hits);
+    interval_percentage = (static_cast<double>(metric_interval_hits) / static_cast<double>(metric_suffix_comps)) * 100.0;
+    spdlog::debug("Number of comparisons resolved with LCP-intervals: {} ({:.2f}%)", metric_interval_hits, interval_percentage);
+    backbone_percentage = (static_cast<double>(metric_backbone_hits) / static_cast<double>(metric_suffix_comps)) * 100.0;
+    spdlog::debug("Number of comparisons resolved with complete factor backbone: {} ({:.2f}%)", metric_backbone_hits, backbone_percentage);
     spdlog::debug("Number of LCE queries performed during sorting: {}", metric_boundary_hits);
     metric_avg_boundary_per_comp = static_cast<double>(metric_boundary_hits) / static_cast<double>(metric_suffix_comps);
     spdlog::debug("Average number of LCE queries per suffix comparison: {:.3f}", metric_avg_boundary_per_comp);
@@ -850,8 +856,10 @@ void RLZ_CHAR_SORT<int_t>::sort_induced(bool apply_resync) {
 
     metric_sort_time = sw_sort.elapsed().count();
     spdlog::debug("Number of suffix comparison performed: {}", metric_suffix_comps);
-    spdlog::debug("Number of comparisons resolved with LCP-intervals: {}", metric_interval_hits);
-    spdlog::debug("Number of comparisons resolved with complete factor backbone: {}", metric_backbone_hits);
+    interval_percentage = (static_cast<double>(metric_interval_hits) / static_cast<double>(metric_suffix_comps)) * 100.0;
+    spdlog::debug("Number of comparisons resolved with LCP-intervals: {} ({:.2f}%)", metric_interval_hits, interval_percentage);
+    backbone_percentage = (static_cast<double>(metric_backbone_hits) / static_cast<double>(metric_suffix_comps)) * 100.0;
+    spdlog::debug("Number of comparisons resolved with complete factor backbone: {} ({:.2f}%)", metric_backbone_hits, backbone_percentage);
     spdlog::debug("Number of LCE queries performed during sorting: {}", metric_boundary_hits);
     metric_avg_boundary_per_comp = static_cast<double>(metric_boundary_hits) / static_cast<double>(metric_suffix_comps);
     spdlog::debug("Average number of LCE queries per suffix comparison: {:.3f}", metric_avg_boundary_per_comp);
@@ -897,8 +905,10 @@ void RLZ_CHAR_SORT<int_t>::sort_factors_only(bool apply_resync) {
 
     metric_sort_time = sw_sort.elapsed().count();
     spdlog::debug("Number of suffix comparison performed: {}", metric_suffix_comps);
-    spdlog::debug("Number of comparisons resolved with LCP-intervals: {}", metric_interval_hits);
-    spdlog::debug("Number of comparisons resolved with complete factor backbone: {}", metric_backbone_hits);
+    interval_percentage = (static_cast<double>(metric_interval_hits) / static_cast<double>(metric_suffix_comps)) * 100.0;
+    spdlog::debug("Number of comparisons resolved with LCP-intervals: {} ({:.2f}%)", metric_interval_hits, interval_percentage);
+    backbone_percentage = (static_cast<double>(metric_backbone_hits) / static_cast<double>(metric_suffix_comps)) * 100.0;
+    spdlog::debug("Number of comparisons resolved with complete factor backbone: {} ({:.2f}%)", metric_backbone_hits, backbone_percentage);
     spdlog::debug("Number of LCE queries performed during sorting: {}", metric_boundary_hits);
     metric_avg_boundary_per_comp = static_cast<double>(metric_boundary_hits) / static_cast<double>(metric_suffix_comps);
     spdlog::debug("Average number of LCE queries per suffix comparison: {:.3f}", metric_avg_boundary_per_comp);
