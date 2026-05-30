@@ -1076,6 +1076,24 @@ void RLZ_CHAR_SORT<int_t>::stream_sa_to_file(const std::string parse_file) {
     spdlog::info("Finished streaming suffix array to file in {:.3f} seconds", sw_stream.elapsed().count());
 }
 
+/**
+ * @brief Calculates and logs a highly accurate peak memory estimate and safe SLURM allocation request.
+ * This function dynamically estimates the maximum RAM footprint required during the sorting pipeline. 
+ * 
+ * It accounts for two primary memory consumers:
+ * 1. The target sequence: Scaled by the exact byte-size of the SortableSuffix struct. If performing a 
+ * factor-only sort, this scales with number of factors. Otherwise, it scales with total characters.
+ * 2. The reference sequence: Assumes a ~3.5x multiplier on the raw file size to account for the construction 
+ * of the SDSL Compressed Suffix Array, bit-compressed LCP, ISA samples, and RMQ succinct structures.
+ * 
+ * Finally, a 15% safety buffer is applied to account for Linux OS file buffers and OpenMP thread overhead 
+ * to generate a guaranteed-safe #SBATCH --mem directive.
+ * 
+ * @param [in] sort_method [std::string] The exact sorting algorithm being executed (e.g., "Induced_Sort").
+ * @param [in] ref_bytes [uintmax_t] The uncompressed size of the reference sequence file in bytes.
+ * @return void
+ */
+
 template<typename int_t>
 void RLZ_CHAR_SORT<int_t>::log_memory_estimate(const std::string& sort_method, uintmax_t ref_bytes) const {
     
@@ -1141,7 +1159,7 @@ void RLZ_CHAR_SORT<int_t>::log_memory_estimate(const std::string& sort_method, u
     }
     
     if (slurm_safe_gb > 64.0) {
-        spdlog::warn("HIGH MEMORY WARNING: This job requires a 'fat' node.");
+        spdlog::warn("HIGH MEMORY WARNING: This job requires a large node.");
     }
     
     // Ensure we always request at least 1G from SLURM
