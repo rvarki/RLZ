@@ -45,7 +45,7 @@ class RLZ_CHAR_SORT
         sort_lcp_index_t lcp_ref; 
         sort_rmq_index_t lcp_rmq; 
         std::vector<RLZ_Factor> rlz_factors;
-        std::vector<SuffixID> sa_T; // Stores the suffix array as 2D representation 
+        std::vector<SortableSuffix> sorted_suffixes; // Stores the suffix array 
 
         RLZ_CHAR_SORT(const std::string ref_file, const std::string parse_file);
         ~RLZ_CHAR_SORT();
@@ -742,8 +742,10 @@ void RLZ_CHAR_SORT<int_t>::sort_naive(bool apply_resync) {
         return compare_suffixes(a, b);
     });
 
-    sa_T.reserve(all_suffixes.size());
-    for(const auto& suf : all_suffixes) sa_T.push_back(suf.id);
+    sorted_suffixes = std::move(all_suffixes); // O(1) pointer swap
+
+    all_suffixes.clear();
+    all_suffixes.shrink_to_fit();
 
     metric_sort_time = sw_sort.elapsed().count();
     spdlog::debug("Number of suffix comparison performed: {}", metric_suffix_comps);
@@ -792,8 +794,10 @@ void RLZ_CHAR_SORT<int_t>::sort_lcp_interval(bool apply_resync) {
         return compare_suffixes(a, b);
     });
 
-    sa_T.reserve(all_suffixes.size());
-    for(const auto& suf : all_suffixes) sa_T.push_back(suf.id);
+    sorted_suffixes = std::move(all_suffixes); // O(1) pointer swap
+
+    all_suffixes.clear();
+    all_suffixes.shrink_to_fit();
 
     metric_sort_time = sw_sort.elapsed().count();
     spdlog::debug("Number of suffix comparison performed: {}", metric_suffix_comps);
@@ -879,13 +883,13 @@ void RLZ_CHAR_SORT<int_t>::sort_induced(bool apply_resync) {
         return compare_suffixes(a, b, &factor_ranks);
     });
 
-    sa_T.reserve(all_suffixes.size());
+    sorted_suffixes.reserve(complete_bin.size() + incomplete_bin.size());
     
     // Merge the sorted complete and incomplete factors
     size_t i = 0, j = 0;
     while (i < complete_bin.size() && j < incomplete_bin.size()) {
-        const SortableSuffix& a = complete_bin[i];
-        const SortableSuffix& b = incomplete_bin[j];
+        SortableSuffix& a = complete_bin[i];
+        SortableSuffix& b = incomplete_bin[j];
         
         bool a_is_smaller;
 
@@ -903,14 +907,31 @@ void RLZ_CHAR_SORT<int_t>::sort_induced(bool apply_resync) {
 
         // Push the winner to the final array
         if (a_is_smaller) {
-            sa_T.push_back(complete_bin[i++].id);
+            sorted_suffixes.push_back(std::move(complete_bin[i++]));
         } else {
-            sa_T.push_back(incomplete_bin[j++].id);
+            sorted_suffixes.push_back(std::move(incomplete_bin[j++]));
         }
     }
     // Flush the remaining elements
-    while (i < complete_bin.size()) sa_T.push_back(complete_bin[i++].id);
-    while (j < incomplete_bin.size()) sa_T.push_back(incomplete_bin[j++].id);
+    if (i < complete_bin.size()) {
+        this->sorted_suffixes.insert(
+            this->sorted_suffixes.end(),
+            std::make_move_iterator(complete_bin.begin() + i),
+            std::make_move_iterator(complete_bin.end())
+        );
+    }
+    if (j < incomplete_bin.size()) {
+        this->sorted_suffixes.insert(
+            this->sorted_suffixes.end(),
+            std::make_move_iterator(incomplete_bin.begin() + j),
+            std::make_move_iterator(incomplete_bin.end())
+        );
+    }
+
+    complete_bin.clear();
+    complete_bin.shrink_to_fit();
+    incomplete_bin.clear();
+    incomplete_bin.shrink_to_fit();
 
     metric_sort_time = sw_sort.elapsed().count();
     spdlog::debug("Number of suffix comparison performed: {}", metric_suffix_comps);
@@ -956,10 +977,10 @@ void RLZ_CHAR_SORT<int_t>::sort_factors_only(bool apply_resync) {
         return compare_suffixes(a, b);
     });
 
-    sa_T.reserve(complete_bin.size());
-    for(const auto& suf : complete_bin) {
-        sa_T.push_back(suf.id);
-    }
+    sorted_suffixes = std::move(complete_bin); // O(1) pointer swap
+
+    complete_bin.clear();
+    complete_bin.shrink_to_fit();
 
     metric_sort_time = sw_sort.elapsed().count();
     spdlog::debug("Number of suffix comparison performed: {}", metric_suffix_comps);
@@ -1018,7 +1039,7 @@ void RLZ_CHAR_SORT<int_t>::write_json(const std::string parse_file, const std::s
  * Bypasses full 1D vector allocation to save memory (preventing OOM on large datasets).
  * Calculates the absolute 1D character index on the fly using a prefix sum of factor lengths.
  * Writes each absolute index as a standard text string followed by a newline.
- * * @param [in] parse_file [std::string] The input parse file path used to generate output path.
+ * @param [in] parse_file [std::string] The input parse file path used to generate output path.
  */
 template<typename int_t>
 void RLZ_CHAR_SORT<int_t>::stream_sa_to_file(const std::string parse_file) {
@@ -1045,16 +1066,13 @@ void RLZ_CHAR_SORT<int_t>::stream_sa_to_file(const std::string parse_file) {
     }
 
     // Stream elements directly to the file, one per line.
-    for (const auto& suf : sa_T) {
-        size_t absolute_index = factor_starts[suf.factor_idx] + suf.offset;
+    for (const auto& suf : this->sorted_suffixes) {
+        size_t absolute_index = factor_starts[suf.id.factor_idx] + suf.id.offset;
         out << absolute_index << '\n';
     }
 
     out.close();
     spdlog::info("Finished streaming suffix array to file in {:.3f} seconds", sw_stream.elapsed().count());
 }
-
-
-
 
 #endif  // SORT_ALGO_CHAR_H
