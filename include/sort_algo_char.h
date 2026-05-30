@@ -826,10 +826,13 @@ void RLZ_CHAR_SORT<int_t>::sort_induced(bool apply_resync) {
     std::vector<SortableSuffix> complete_bin;
     std::vector<SortableSuffix> incomplete_bin;
     
-    for (const auto& suf : all_suffixes) {
-        if (suf.id.offset == 0) complete_bin.push_back(suf);
-        else incomplete_bin.push_back(suf);
+    for (auto& suf : all_suffixes) {
+        if (suf.id.offset == 0) complete_bin.push_back(std::move(suf));
+        else incomplete_bin.push_back(std::move(suf)); // To avoid duplicating the data
     }
+
+    all_suffixes.clear();
+    all_suffixes.shrink_to_fit();
 
     // Actual Sorting Logic
     spdlog::info("Executing Induced Sort (Resync: {})", apply_resync);
