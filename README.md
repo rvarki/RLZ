@@ -149,7 +149,7 @@ In this section, we show how to use the sort exectuable. We assume that you have
 ./sort rlz -r ../data/dna/dna_ref.txt -p ../data/dna/dna_seq.txt.rlz --naive
 ```
 
-This command should produce a file called `dna_seq.txt.rlz.sa` in the data/dna directory. This file contains the suffix array of the original text. This was found by directly sorting the RLZ pairs without any decompression.
+This command produces a file named `dna_seq.txt.rlz.sa` in the data/dna directory. The file contains the suffix array of the original text, computed by decomposing complete RLZ factors into their constituent complete and incomplete factors before sorting. Additional sorting options are available and can be viewed by passing the `-h` flag.
 
 2. To sort the original sequence file, run the following command
 
@@ -169,6 +169,25 @@ There should be no output from this command if the sorting was done correctly.
 
 > [!NOTE]
 > The suffix array is 0-based and does not assume the presence of a terminal sentinel symbol, unlike most constructions.
+
+The previous sort command expands the RLZ representation into complete and incomplete factors to construct the full suffix array. Alternatively, it can construct a partial suffix array containing only suffixes represented by complete RLZ factors.
+
+4. To sort only the complete RLZ factors, run the following command
+
+```
+./sort rlz -r ../data/dna/dna_ref.txt -p ../data/dna/dna_seq.txt.rlz --factors-only
+```
+
+This will overwrite the suffix array produced by the last sort command. 
+
+5. To verify that the partial suffix array is a subset of the full suffix array, run the following command
+
+```
+awk 'NR==FNR{a[++n]=$1; next} $1==a[i+1]{i++} END{exit (i<n)}' ../data/dna/dna_seq.txt.rlz.sa ../data/dna/dna_seq.txt.sa  && echo "Ordered subset" || echo "Not an ordered subset"
+```
+
+The above command should output: "Ordered Subset"
+
 
 > [!NOTE]
 > To get more information from the tools. Run the commands with the -v option.
