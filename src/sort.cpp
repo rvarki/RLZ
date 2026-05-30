@@ -15,6 +15,7 @@
 #include <cstdint>
 #include <filesystem> // Note that this requires at least gcc 9
 #include <limits>
+#include <omp.h>
 
 template <typename int_t>
 void run_rlz_bit_sort(const std::string& ref_file, const std::string& parse_file, bool naive, bool interval, bool induced, bool only_factor, bool resync, bool json)
@@ -72,10 +73,10 @@ int main(int argc, char **argv)
     std::string output;
     bool bit = false;
     bool rlz_repair = false;
-    bool match_limit; // If max_len was set, we do not know whether the factors are maximal
     int verbosity = 0;
     bool json = false; // Write out stats in JSON lines format
     bool resync = false; // Apply resycnronization to the RLZ parse
+    int threads = 1; // Number of threads to use for preprocessing OPENMP loop
 
     // Compression groups for RLZ
     bool naive = false;
@@ -89,7 +90,6 @@ int main(int argc, char **argv)
     auto* rlz_cmd = app.add_subcommand("rlz", "Sorting suffixes directly from RLZ factors");
     rlz_cmd->add_option("-r,--ref", ref_file, "Reference file")->required();
     rlz_cmd->add_option("-p,--parse", parse_file, "RLZ parse file to sort")->required();
-    // rlz_cmd->add_option("-o,--output", parse_file, "Output prefix")->required();
     rlz_cmd->add_flag("--bit", bit, "Set if used during compression");
     rlz_cmd->add_flag("--repair", rlz_repair, "Set if used during compression");
 
@@ -101,14 +101,13 @@ int main(int argc, char **argv)
     compression_group->require_option(1);
 
     rlz_cmd->add_flag("--resync", resync, "Apply resynchronization prior to sorting");
-    // rlz_cmd->add_flag("--limit", match_limit, "Set if a match limit was specified during compression");
     rlz_cmd->add_flag("--json", json, "Output JSON Lines file containing sorting statistics");
+    rlz_cmd->add_option("-t,--threads", threads, "Number of OpenMP threads to use during pre-processing step (default: 1)");
     rlz_cmd->add_option("-v,--verbosity", verbosity, "Set verbosity level (0 = info, 1 = debug, 2 = trace)")->check(CLI::Range(0, 2))->default_val(0);
     
     // Text sorting
     auto* text_cmd = app.add_subcommand("text", "Sorting suffixes directly from text");
     text_cmd->add_option("-s,--seq", seq_file, "Sequence file to sort")->required();
-    // text_cmd->add_option("-o,--output", parse_file, "Output prefix")->required();
     text_cmd->add_flag("--json", json, "Output JSON Lines file containing sorting statistics");
     text_cmd->add_option("-v,--verbosity", verbosity, "Set verbosity level (0 = info, 1 = debug, 2 = trace)")->check(CLI::Range(0, 2))->default_val(0);
 
@@ -124,6 +123,8 @@ int main(int argc, char **argv)
                "  ./sort text -s sequence.fasta [--json]\n");
 
     CLI11_PARSE(app, argc, argv);
+
+    omp_set_num_threads(threads); // Can only modify from rlz sort where it is used
 
     if (verbosity == 2) {
         spdlog::set_level(spdlog::level::trace);
