@@ -35,10 +35,9 @@ class RLZ_CHAR_SORT
         // Represents a resynchronized state for the sort
         // id: The underlying SuffixID coordinate
         // first_factor: The factor after resynchronization or the original factor if option not used
-        // is_ind: Whether first_factor is indicative or not
         // borrowed: Tracks characters consumed from subsequent factors during resync
         // sa_range: Caches the [start, end] interval
-        struct SortableSuffix { SuffixID id; RLZ_Factor first_factor; bool is_ind; int_t borrowed; std::pair<int_t, int_t> sa_range; };
+        struct SortableSuffix { SuffixID id; RLZ_Factor first_factor; int_t borrowed; std::pair<int_t, int_t> sa_range; };
 
         std::string ref_content;
         sort_csa_index_t csa_ref; 
@@ -551,15 +550,14 @@ std::vector<typename RLZ_CHAR_SORT<int_t>::SortableSuffix> RLZ_CHAR_SORT<int_t>:
             if (!already_ind && offset > 0 && apply_resync && i + 1 < rlz_factors.size()) {
                 spdlog::trace("Factor ({},{}) is not indicative so trying to resync", effective_first.p, effective_first.l);
                 effective_first = apply_resynchronization(effective_first, rlz_factors[i+1]);
-                suf.is_ind = is_indicative(effective_first); // Re-evaluate after extending
+                already_ind = is_indicative(effective_first); // Re-evaluate after extending
             } 
             else {
                 spdlog::trace("Factor ({},{}) is either indicative or resync not enabled", effective_first.p, effective_first.l); 
-                suf.is_ind = already_ind; 
             }
 
             // Track indicativeness after resynchronization
-            if (suf.is_ind) { metric_resync_indicative++; }
+            if (already_ind) { metric_resync_indicative++; }
             else { metric_resync_not_indicative++; }
             
             suf.first_factor = effective_first;
@@ -568,7 +566,7 @@ std::vector<typename RLZ_CHAR_SORT<int_t>::SortableSuffix> RLZ_CHAR_SORT<int_t>:
             if (suf.borrowed > 0) { metric_resync++; } 
 
             // Only pay for the RMQ binary search if the factor is NON-indicative
-            if (suf.is_ind) {
+            if (already_ind) {
                 int_t rank = csa_ref.isa[suf.first_factor.p];
                 suf.sa_range = {rank, rank}; 
             } else {
@@ -624,14 +622,15 @@ std::vector<typename RLZ_CHAR_SORT<int_t>::SortableSuffix> RLZ_CHAR_SORT<int_t>:
         // Only attempt to extend if the factor is non-indicative AND resync is requested
         // Only request resync for this sort if you specied a match length during inital RLZ parsing
         if (!already_ind && apply_resync && i + 1 < rlz_factors.size()) {
+            spdlog::trace("Factor ({},{}) is not indicative so trying to resync", effective_first.p, effective_first.l);
             effective_first = apply_resynchronization(effective_first, rlz_factors[i+1]);
-            suf.is_ind = is_indicative(effective_first); // Re-evaluate after extension
+            already_ind = is_indicative(effective_first); // Re-evaluate after extension
         } else {
-            suf.is_ind = already_ind;
+            spdlog::trace("Factor ({},{}) is either indicative or resync not enabled", effective_first.p, effective_first.l); 
         }
 
         // Track indicativeness after resynchronization
-        if (suf.is_ind) { metric_resync_indicative++; }
+        if (already_ind) { metric_resync_indicative++; }
         else { metric_resync_not_indicative++; }
         
         suf.first_factor = effective_first;
@@ -640,7 +639,7 @@ std::vector<typename RLZ_CHAR_SORT<int_t>::SortableSuffix> RLZ_CHAR_SORT<int_t>:
         if (suf.borrowed > 0) { metric_resync++; } 
         
         //  Cache the Suffix Array interval efficiently
-        if (suf.is_ind) {
+        if (already_ind) {
             // O(1) instantaneous lookup for unique factors
             int_t rank = csa_ref.isa[suf.first_factor.p];
             suf.sa_range = {rank, rank}; 
