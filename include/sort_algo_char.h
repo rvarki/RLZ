@@ -20,6 +20,7 @@
 #include <vector>
 #include <algorithm>
 #include <numeric>
+#include <omp.h>
 
 template<typename int_t>
 class RLZ_CHAR_SORT
@@ -416,8 +417,6 @@ std::pair<int_t, int_t> RLZ_CHAR_SORT<int_t>::get_sa_range(const RLZ_Factor& f) 
 template<typename int_t>
 typename RLZ_CHAR_SORT<int_t>::RLZ_Factor RLZ_CHAR_SORT<int_t>::apply_resynchronization(const RLZ_Factor& f_i, const RLZ_Factor& f_next) {
 
-    spdlog::stopwatch sw_resync;
-
     std::pair<int_t, int_t> range_i = get_sa_range(f_i);
     
     // Safety check: if factor doesn't exist, return original
@@ -490,8 +489,6 @@ typename RLZ_CHAR_SORT<int_t>::RLZ_Factor RLZ_CHAR_SORT<int_t>::apply_resynchron
             }
         }
     }
-
-    metric_resync_time += sw_resync.elapsed().count();
     
     if (max_k > 0) {
         spdlog::trace("Resynchronization occured");
@@ -528,12 +525,32 @@ std::vector<typename RLZ_CHAR_SORT<int_t>::SortableSuffix> RLZ_CHAR_SORT<int_t>:
     // Pre-allocate the exact amount of required memory once
     std::vector<SortableSuffix> all_suffixes(total_suffixes);
     
+    // Thread-safe metric variables
+    size_t loc_ind = 0, loc_not_ind = 0, loc_resync_ind = 0;
+    size_t loc_resync_not_ind = 0, loc_resync = 0;
+    double loc_resync_time = 0.0;
+
+    // Figure out if this loop is actually parallelized
+    #ifdef _OPENMP
+    #pragma omp parallel
+    {
+        // #pragma omp single ensures only ONE thread prints this message, 
+        #pragma omp single 
+        spdlog::info("OpenMP is ACTIVE! Running {} parallel threads.", omp_get_num_threads());
+    }
+    #else
+        spdlog::warn("OpenMP is NOT active. Running sequentially on 1 thread.");
+    #endif
+
+    // Parallel Loop 
+    #pragma omp parallel for schedule(dynamic, 1024) \
+        reduction(+:loc_ind, loc_not_ind, loc_resync_ind, loc_resync_not_ind, loc_resync, loc_resync_time)
     for (size_t i = 0; i < rlz_factors.size(); ++i) {
         size_t base_idx = factor_starts[i];
+        
         for (size_t offset = 0; offset < rlz_factors[i].l; ++offset) {
-            
             SortableSuffix suf;
-            suf.id = {static_cast<size_t>(i), static_cast<int_t>(offset)};
+            suf.id = {i, static_cast<int_t>(offset)};
             
             int_t orig_l = static_cast<int_t>(rlz_factors[i].l - offset);
             RLZ_Factor effective_first = {
@@ -541,41 +558,52 @@ std::vector<typename RLZ_CHAR_SORT<int_t>::SortableSuffix> RLZ_CHAR_SORT<int_t>:
                 orig_l
             };
 
-            bool already_ind = is_indicative(effective_first);
+            bool local_is_ind = is_indicative(effective_first);
 
-            // Keep track of indicativeness before resynchronization
-            if (already_ind) { metric_indicative++; }
-            else { metric_not_indicative++; }
+            if (local_is_ind) { loc_ind++; } else { loc_not_ind++; }
             
-            if (!already_ind && offset > 0 && apply_resync && i + 1 < rlz_factors.size()) {
-                spdlog::trace("Factor ({},{}) is not indicative so trying to resync", effective_first.p, effective_first.l);
-                effective_first = apply_resynchronization(effective_first, rlz_factors[i+1]);
-                already_ind = is_indicative(effective_first); // Re-evaluate after extending
-            } 
-            else {
-                spdlog::trace("Factor ({},{}) is either indicative or resync not enabled", effective_first.p, effective_first.l); 
-            }
+            // Thread-safe resynchronization timing
+            if (!local_is_ind && offset > 0 && apply_resync && i + 1 < rlz_factors.size()) {
+                #ifdef _OPENMP
+                double start_time = omp_get_wtime(); // High-res OpenMP timer
+                #endif
 
-            // Track indicativeness after resynchronization
-            if (already_ind) { metric_resync_indicative++; }
-            else { metric_resync_not_indicative++; }
+                effective_first = apply_resynchronization(effective_first, rlz_factors[i+1]);
+
+                #ifdef _OPENMP
+                loc_resync_time += (omp_get_wtime() - start_time);
+                #endif
+
+                local_is_ind = is_indicative(effective_first); 
+            } 
+
+            if (local_is_ind) { loc_resync_ind++; } else { loc_resync_not_ind++; }
             
             suf.first_factor = effective_first;
             suf.borrowed = static_cast<int_t>(effective_first.l - orig_l);
 
-            if (suf.borrowed > 0) { metric_resync++; } 
+            if (suf.borrowed > 0) { loc_resync++; } 
 
-            // Only pay for the RMQ binary search if the factor is NON-indicative
-            if (already_ind) {
-                int_t rank = csa_ref.isa[suf.first_factor.p];
+            // Calculate the sa_range
+            if (local_is_ind) {
+                int_t rank = csa_ref.isa[effective_first.p];
                 suf.sa_range = {rank, rank}; 
             } else {
-                suf.sa_range = get_sa_range(suf.first_factor);
+                suf.sa_range = get_sa_range(effective_first);
             }
             
+            // Lock-free direct memory write
             all_suffixes[base_idx + offset] = suf;
         }
     }
+    
+    // Aggregate parallel results back into the global class metrics
+    metric_indicative += loc_ind;
+    metric_not_indicative += loc_not_ind;
+    metric_resync_indicative += loc_resync_ind;
+    metric_resync_not_indicative += loc_resync_not_ind;
+    metric_resync += loc_resync;
+    metric_resync_time += loc_resync_time;
     
     spdlog::debug("Prior to resynchronization there were {} indicative factors", metric_indicative);
     spdlog::debug("Prior to resynchronization there were {} non-indicative factors", metric_not_indicative);
@@ -602,54 +630,80 @@ std::vector<typename RLZ_CHAR_SORT<int_t>::SortableSuffix> RLZ_CHAR_SORT<int_t>:
     spdlog::info("Generating ONLY factor boundaries (Resync enabled: {})", apply_resync);
     spdlog::stopwatch sw_preprocess;
 
-    std::vector<SortableSuffix> boundaries;
-    boundaries.reserve(rlz_factors.size());
+    std::vector<SortableSuffix> boundaries(rlz_factors.size());
     
+    // Thread-safe metric variables
+    size_t loc_ind = 0, loc_not_ind = 0, loc_resync_ind = 0;
+    size_t loc_resync_not_ind = 0, loc_resync = 0;
+    double loc_resync_time = 0.0;
+
+    // Figure out if this loop is actually parallelized
+    #ifdef _OPENMP
+    #pragma omp parallel
+    {
+        // #pragma omp single ensures only ONE thread prints this message, 
+        #pragma omp single 
+        spdlog::info("OpenMP is ACTIVE! Running {} parallel threads.", omp_get_num_threads());
+    }
+    #else
+        spdlog::warn("OpenMP is NOT active. Running sequentially on 1 thread.");
+    #endif
+
+    // Parallel Loop 
+    #pragma omp parallel for schedule(dynamic, 1024) \
+        reduction(+:loc_ind, loc_not_ind, loc_resync_ind, loc_resync_not_ind, loc_resync, loc_resync_time)
     for (size_t i = 0; i < rlz_factors.size(); ++i) {
         SortableSuffix suf;
-        suf.id = {static_cast<size_t>(i), 0}; // Strict 0 offset
+        suf.id = {i, 0}; 
         
         RLZ_Factor effective_first = rlz_factors[i];
         int_t orig_l = effective_first.l;
         
-        // Check if factor is already mathematically unique
-        bool already_ind = is_indicative(effective_first);
+        bool local_is_ind = is_indicative(effective_first);
 
-        // Keep track of indicativeness before resynchronization
-        if (already_ind) { metric_indicative++; }
-        else { metric_not_indicative++; }
+        if (local_is_ind) { loc_ind++; } else { loc_not_ind++; }
         
-        // Only attempt to extend if the factor is non-indicative AND resync is requested
-        // Only request resync for this sort if you specied a match length during inital RLZ parsing
-        if (!already_ind && apply_resync && i + 1 < rlz_factors.size()) {
-            spdlog::trace("Factor ({},{}) is not indicative so trying to resync", effective_first.p, effective_first.l);
-            effective_first = apply_resynchronization(effective_first, rlz_factors[i+1]);
-            already_ind = is_indicative(effective_first); // Re-evaluate after extension
-        } else {
-            spdlog::trace("Factor ({},{}) is either indicative or resync not enabled", effective_first.p, effective_first.l); 
-        }
+        // Thread-safe resynchronization timing
+        if (!local_is_ind && apply_resync && i + 1 < rlz_factors.size()) {
+            #ifdef _OPENMP
+            double start_time = omp_get_wtime();
+            #endif
 
-        // Track indicativeness after resynchronization
-        if (already_ind) { metric_resync_indicative++; }
-        else { metric_resync_not_indicative++; }
+            effective_first = apply_resynchronization(effective_first, rlz_factors[i+1]);
+
+            #ifdef _OPENMP
+            loc_resync_time += (omp_get_wtime() - start_time);
+            #endif
+            
+            local_is_ind = is_indicative(effective_first); 
+        } 
+
+        if (local_is_ind) { loc_resync_ind++; } else { loc_resync_not_ind++; }
         
         suf.first_factor = effective_first;
         suf.borrowed = static_cast<int_t>(effective_first.l - orig_l);
 
-        if (suf.borrowed > 0) { metric_resync++; } 
+        if (suf.borrowed > 0) { loc_resync++; } 
         
-        //  Cache the Suffix Array interval efficiently
-        if (already_ind) {
-            // O(1) instantaneous lookup for unique factors
-            int_t rank = csa_ref.isa[suf.first_factor.p];
+        // Calculate the sa_range
+        if (local_is_ind) {
+            int_t rank = csa_ref.isa[effective_first.p];
             suf.sa_range = {rank, rank}; 
         } else {
-            // O(log N) RMQ binary search for non-unique factors
-            suf.sa_range = get_sa_range(suf.first_factor);
+            suf.sa_range = get_sa_range(effective_first);
         }
         
-        boundaries.push_back(suf);
+        // Lock-free direct memory write
+        boundaries[i] = suf;
     }
+
+    // Aggregate parallel results back into the global class metrics
+    metric_indicative += loc_ind;
+    metric_not_indicative += loc_not_ind;
+    metric_resync_indicative += loc_resync_ind;
+    metric_resync_not_indicative += loc_resync_not_ind;
+    metric_resync += loc_resync;
+    metric_resync_time += loc_resync_time;
 
     spdlog::debug("Prior to resynchronization there were {} indicative factors", metric_indicative);
     spdlog::debug("Prior to resynchronization there were {} non-indicative factors", metric_not_indicative);
