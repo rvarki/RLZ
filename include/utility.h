@@ -19,8 +19,8 @@
 // SA_SAMPLE_RATE, ISA_SAMPLE_RATE
 using rlz_fm_index_t = sdsl::csa_wt<sdsl::wt_huff<sdsl::bit_vector>, 4, 4096>; // Only want the SA, not the ISA
 
-using sort_csa_index_t = sdsl::csa_wt<sdsl::wt_huff<sdsl::bit_vector>, 4096, 4>; // Only want the ISA, not the SA
-using sort_lcp_index_t = sdsl::lcp_wt<>; 
+using sort_csa_index_t = sdsl::csa_wt<sdsl::wt_huff<sdsl::bit_vector>, 16, 4>; // Want the SA only for resynchronization, ISA always needed
+using sort_lcp_index_t = sdsl::lcp_bitcompressed<>; 
 using sort_rmq_index_t = sdsl::rmq_succinct_sada<>;
 
 
