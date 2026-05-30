@@ -56,6 +56,7 @@ class RLZ_CHAR_SORT
         void sort_factors_only(bool apply_resync = false);
         void write_json(const std::string out_file, const std::string configuration);
         void stream_sa_to_file(const std::string out_file);
+        void log_memory_estimate(const std::string& sort_method, uintmax_t ref_bytes) const;
     
     private:
         int_t get_lce(int_t i, int_t j); 
@@ -1073,6 +1074,80 @@ void RLZ_CHAR_SORT<int_t>::stream_sa_to_file(const std::string parse_file) {
 
     out.close();
     spdlog::info("Finished streaming suffix array to file in {:.3f} seconds", sw_stream.elapsed().count());
+}
+
+template<typename int_t>
+void RLZ_CHAR_SORT<int_t>::log_memory_estimate(const std::string& sort_method, uintmax_t ref_bytes) const {
+    
+    // Calculate total target characters and total factors
+    size_t total_chars = 0;
+    for (const auto& factor : rlz_factors) {
+        total_chars += factor.l;
+    }
+    size_t total_factors = rlz_factors.size();
+    
+    // Struct size
+    double bytes_per_element = sizeof(SortableSuffix);
+    
+    // Calculate target sequence RAM footprint
+    double target_memory_bytes = 0.0;
+    if (sort_method == "Factor_Only_Sort") {
+        target_memory_bytes = total_factors * bytes_per_element;
+    } else {
+        target_memory_bytes = total_chars * bytes_per_element;
+    }
+    
+    // Calculate SDSL Reference RAM footprint
+    // CSA, LCP, ISA, and RMQ safely peak at roughly 3.5 bytes per reference character
+    double sdsl_memory_bytes = static_cast<double>(ref_bytes) * 3.5; 
+
+    // Combine and convert to Gigabytes
+    double peak_memory_bytes = target_memory_bytes + sdsl_memory_bytes;
+    double mem_gb = peak_memory_bytes / (1024.0 * 1024.0 * 1024.0);
+    
+    // Calculate a safe SLURM request (Peak + 15% for the Linux OS and OpenMP buffers)
+    double slurm_safe_gb = std::ceil(mem_gb * 1.15);
+    
+    // Print the precise dashboard
+    spdlog::info("================ MEMORY ESTIMATE ================");
+    
+    spdlog::info("Sortable Suffix is {} bytes", bytes_per_element);
+
+    // Format Reference Size
+    if (ref_bytes < 1024 * 1024 * 1024) {
+        spdlog::info("Reference Size  : {:.2f} MB (SDSL RAM: ~{:.2f} MB)", 
+                     static_cast<double>(ref_bytes) / (1024.0 * 1024.0), 
+                     sdsl_memory_bytes / (1024.0 * 1024.0));
+    } else {
+        spdlog::info("Reference Size  : {:.2f} GB (SDSL RAM: ~{:.2f} GB)", 
+                     static_cast<double>(ref_bytes) / (1024.0 * 1024.0 * 1024.0), 
+                     sdsl_memory_bytes / (1024.0 * 1024.0 * 1024.0));
+    }
+
+    // Format Target Sequence
+    if (total_chars < 1e9) {
+        spdlog::info("Target Sequence : ~{:.2f} Million Characters", static_cast<double>(total_chars) / 1e6);
+    } else {
+        spdlog::info("Target Sequence : ~{:.2f} Billion Characters", static_cast<double>(total_chars) / 1e9);
+    }
+
+    spdlog::info("Sorting Method  : {}", sort_method);
+
+    // Format Peak RAM
+    if (mem_gb < 1.0) {
+        spdlog::info("Peak RAM Needed : {:.2f} MB", peak_memory_bytes / (1024.0 * 1024.0));
+    } else {
+        spdlog::info("Peak RAM Needed : {:.2f} GB", mem_gb);
+    }
+    
+    if (slurm_safe_gb > 64.0) {
+        spdlog::warn("HIGH MEMORY WARNING: This job requires a 'fat' node.");
+    }
+    
+    // Ensure we always request at least 1G from SLURM
+    double final_slurm_request = std::max(1.0, slurm_safe_gb);
+    spdlog::info("SLURM Request   : #SBATCH --mem={:.0f}G", final_slurm_request);
+    spdlog::info("=================================================");
 }
 
 #endif  // SORT_ALGO_CHAR_H
