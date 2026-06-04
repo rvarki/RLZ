@@ -143,7 +143,11 @@ add_executable(sort ${PROJECT_SRC_DIR}/sort.cpp ${PROJECT_SRC_DIR}/sort_algo_tex
 target_include_directories(sort PUBLIC ${PROJECT_INCLUDE_DIR} ${SDSL_SRC} ${THIRDPARTY_INCLUDE_DIR} ${THIRDPARTY_INCLUDE_DIR}/CLI)
 target_link_libraries(sort PUBLIC ${SDSL_LIB} ${DIVSUFSORT_LIB} ${DIVSUFSORT64_LIB})
 
+add_executable(stats ${PROJECT_SRC_DIR}/stats.cpp)
+target_include_directories(stats PUBLIC ${PROJECT_INCLUDE_DIR} ${THIRDPARTY_INCLUDE_DIR} ${THIRDPARTY_INCLUDE_DIR}/CLI)
+
 install(TARGETS fm_wrapper TYPE LIBRARY)
 install(TARGETS rlz TYPE RUNTIME)
 install(TARGETS sort TYPE RUNTIME)
+install(TARGETS stats TYPE RUNTIME)
 
